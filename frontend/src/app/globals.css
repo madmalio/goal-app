@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Default to Light Mode behavior */
+  color-scheme: light;
+}
+
+/* Dark Mode Overrides (Triggered by next-themes adding class="dark" to html) */
+.dark {
+  color-scheme: dark;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-zinc-100 dark:bg-zinc-900;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-400 dark:bg-zinc-700;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-500 dark:bg-zinc-600;
+}
+
+/* Date Picker Fixes: Only invert the icon in Dark Mode */
+.dark ::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.6;
+  cursor: pointer;
+}
+.dark ::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* PRINT STYLES - "The Report Mode" */
+@media print {
+  /* 1. Force White Background & Black Text */
+  body,
+  main,
+  div,
+  table,
+  th,
+  td,
+  p,
+  span,
+  h1,
+  h2,
+  h3 {
+    background-color: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 2. Hide "Interactive" and "Screen-Only" elements */
+  aside,
+  form,
+  button,
+  input[type="submit"],
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* 3. Reset Layout (Remove Sidebar margin) */
+  main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 4. Ensure borders print sharply */
+  table,
+  th,
+  td {
+    border-color: black !important;
+  }
+}
