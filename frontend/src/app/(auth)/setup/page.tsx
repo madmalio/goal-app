@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { fetchFromAPI } from "../../../utils/api";
 import { useToast } from "../../../context/ToastContext";
 
-// Icon Components
 const EyeIcon = () => (
   <svg
     className="w-5 h-5 text-slate-400 hover:text-slate-600 cursor-pointer"
@@ -43,20 +42,23 @@ const EyeOffIcon = () => (
   </svg>
 );
 
-export default function LoginPage() {
+export default function SetupPage() {
   const router = useRouter();
   const toast = useToast();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const checkStatus = async () => {
       try {
         const res = await fetchFromAPI("/status");
-        if (res.is_setup === false) {
-          router.replace("/setup");
+        if (res.is_setup === true) {
+          router.replace("/login");
         }
       } catch (e) {
         console.error("Status check failed", e);
@@ -65,38 +67,38 @@ export default function LoginPage() {
     checkStatus();
   }, [router]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSetup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
     try {
-      const res = await fetchFromAPI("/login", {
+      await fetchFromAPI("/setup", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      if (res.role) localStorage.setItem("user_role", res.role);
-      localStorage.setItem("user_email", email);
-      toast.success("Welcome back!");
-      setTimeout(() => (window.location.href = "/"), 500);
-    } catch (err) {
-      toast.error("Invalid email or password");
+      toast.success("System initialized! Please log in.");
+      setTimeout(() => router.push("/login"), 1000);
+    } catch (err: any) {
+      toast.error(err.message || "Setup failed");
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4">
       <div className="max-w-md w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            GOAL MASTER
-          </h1>
-          <p className="text-slate-500 dark:text-zinc-400 mt-2">
-            Sign in to access student records
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold text-center text-slate-900 dark:text-white mb-2">
+          Initial System Setup
+        </h1>
+        <p className="text-center text-slate-500 dark:text-zinc-400 mb-8">
+          Create the primary Admin account.
+        </p>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleSetup} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
-              Email
+              Admin Email
             </label>
             <input
               type="email"
@@ -108,7 +110,7 @@ export default function LoginPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
-              Password
+              Create Password
             </label>
             <div className="relative">
               <input
@@ -126,12 +128,31 @@ export default function LoginPage() {
               </div>
             </div>
           </div>
-
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
+              Confirm Password
+            </label>
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                required
+                className="w-full px-3 py-2 border rounded-md bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none pr-10"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+              <div
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={() => setShowConfirm(!showConfirm)}
+              >
+                {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
+              </div>
+            </div>
+          </div>
           <button
             type="submit"
-            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-md transition-colors shadow-sm"
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-md transition-colors"
           >
-            Sign In
+            Complete Setup
           </button>
         </form>
       </div>

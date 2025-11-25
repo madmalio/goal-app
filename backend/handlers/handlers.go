@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	
+
 	"goal-app/models"
 )
 
@@ -72,6 +72,8 @@ func (repo *Repository) UpdateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+	// FIX: Return JSON
+	w.Write([]byte(`{"message": "Student updated"}`))
 }
 
 func (repo *Repository) DeleteStudent(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +92,8 @@ func (repo *Repository) DeleteStudent(w http.ResponseWriter, r *http.Request) {
 	}
 	tx.Commit(context.Background())
 	w.WriteHeader(http.StatusOK)
+	// FIX: Return JSON
+	w.Write([]byte(`{"message": "Student deleted"}`))
 }
 
 // --- GOALS ---
@@ -154,6 +158,8 @@ func (repo *Repository) UpdateGoal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+	// FIX: Return JSON
+	w.Write([]byte(`{"message": "Goal updated"}`))
 }
 
 func (repo *Repository) DeleteGoal(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +176,8 @@ func (repo *Repository) DeleteGoal(w http.ResponseWriter, r *http.Request) {
 	}
 	tx.Commit(context.Background())
 	w.WriteHeader(http.StatusOK)
+	// FIX: Return JSON
+	w.Write([]byte(`{"message": "Goal deleted"}`))
 }
 
 // --- LOGS ---
@@ -179,7 +187,6 @@ func (repo *Repository) CreateLog(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&req)
 	date, _ := time.Parse("2006-01-02", req.LogDate)
 
-	// Updated SQL to include NOTES
 	sql := `INSERT INTO tracking_logs (goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`
 	var newID int
 	err := repo.DB.QueryRow(context.Background(), sql, req.GoalID, date, req.Score, req.PromptLevel, req.ManipulativesUsed, req.ManipulativesType, req.Compliance, req.Behavior, req.TimeSpent, req.Notes).Scan(&newID)
@@ -193,7 +200,6 @@ func (repo *Repository) CreateLog(w http.ResponseWriter, r *http.Request) {
 
 func (repo *Repository) GetLogs(w http.ResponseWriter, r *http.Request) {
 	gid := r.URL.Query().Get("goal_id")
-	// Updated SQL to include NOTES
 	rows, err := repo.DB.Query(context.Background(), "SELECT id, goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, COALESCE(notes, '') FROM tracking_logs WHERE goal_id = $1 ORDER BY log_date DESC, created_at DESC", gid)
 	
 	if err != nil {
@@ -226,6 +232,8 @@ func (repo *Repository) UpdateLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+	// FIX: Return JSON
+	w.Write([]byte(`{"message": "Log updated"}`))
 }
 
 func (repo *Repository) DeleteLog(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +244,8 @@ func (repo *Repository) DeleteLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+	// FIX: Return JSON
+	w.Write([]byte(`{"message": "Log deleted"}`))
 }
 
 // --- DASHBOARD & BACKUP ---
@@ -301,7 +311,6 @@ func (repo *Repository) RestoreBackup(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	tx.Exec(ctx, "DELETE FROM tracking_logs"); tx.Exec(ctx, "DELETE FROM goals"); tx.Exec(ctx, "DELETE FROM students");
-
 	for _, s := range data.Students { tx.Exec(ctx, "INSERT INTO students (id, name, student_id, active) VALUES ($1, $2, $3, $4)", s.ID, s.Name, s.StudentID, s.Active) }
 	for _, g := range data.Goals { tx.Exec(ctx, "INSERT INTO goals (id, student_id, subject, iep_date, description, active) VALUES ($1, $2, $3, $4, $5, $6)", g.ID, g.StudentID, g.Subject, g.IEPDate, g.Description, g.Active) }
 	for _, l := range data.Logs { tx.Exec(ctx, "INSERT INTO tracking_logs (id, goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", l.ID, l.GoalID, l.LogDate, l.Score, l.PromptLevel, l.ManipulativesUsed, l.ManipulativesType, l.Compliance, l.Behavior, l.TimeSpent, l.Notes) }
@@ -312,4 +321,21 @@ func (repo *Repository) RestoreBackup(w http.ResponseWriter, r *http.Request) {
 
 	tx.Commit(ctx)
 	w.WriteHeader(http.StatusOK)
+}
+
+// ResetDatabase wipes all data BUT KEEPS USERS
+func (repo *Repository) ResetDatabase(w http.ResponseWriter, r *http.Request) {
+	tx, _ := repo.DB.Begin(context.Background())
+	defer tx.Rollback(context.Background())
+	
+	_, err := tx.Exec(context.Background(), "TRUNCATE TABLE tracking_logs, goals, students RESTART IDENTITY CASCADE")
+	if err != nil {
+		http.Error(w, "Failed to wipe data", 500)
+		return
+	}
+	
+	tx.Commit(context.Background())
+	w.WriteHeader(http.StatusOK)
+	// FIX: Return JSON
+	w.Write([]byte(`{"message": "Database wiped successfully"}`))
 }

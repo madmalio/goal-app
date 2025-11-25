@@ -1,13 +1,10 @@
 @import "tailwindcss";
-
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* Default to Light Mode behavior */
   color-scheme: light;
 }
 
-/* Dark Mode Overrides (Triggered by next-themes adding class="dark" to html) */
 .dark {
   color-scheme: dark;
 }
@@ -27,7 +24,7 @@
   @apply bg-zinc-500 dark:bg-zinc-600;
 }
 
-/* Date Picker Fixes: Only invert the icon in Dark Mode */
+/* Date Picker Icons */
 .dark ::-webkit-calendar-picker-indicator {
   filter: invert(1);
   opacity: 0.6;
@@ -37,48 +34,70 @@
   opacity: 1;
 }
 
-/* PRINT STYLES - "The Report Mode" */
+/* --- PROFESSIONAL PRINT STYLES --- */
 @media print {
-  /* 1. Force White Background & Black Text */
+  /* 1. Reset Colors to Ink-Friendly Black/White */
+  :root,
   body,
-  main,
-  div,
-  table,
-  th,
-  td,
-  p,
-  span,
-  h1,
-  h2,
-  h3 {
+  [class*="dark"] {
+    color-scheme: light !important;
     background-color: white !important;
     color: black !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
   }
 
-  /* 2. Hide "Interactive" and "Screen-Only" elements */
+  /* 2. Hide Interface Elements */
   aside,
-  form,
+  nav,
   button,
-  input[type="submit"],
+  input,
+  textarea,
+  select,
   .no-print,
-  .print\:hidden {
+  .print\:hidden,
+  [role="alert"] {
     display: none !important;
   }
 
-  /* 3. Reset Layout (Remove Sidebar margin) */
+  /* 3. Layout Reset */
+  body,
   main {
-    margin-left: 0 !important;
+    margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
     width: 100% !important;
-    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 
-  /* 4. Ensure borders print sharply */
-  table,
+  /* 4. Typography */
+  h1,
+  h2,
+  h3,
+  p,
+  td,
   th,
-  td {
-    border-color: black !important;
+  span {
+    color: black !important;
+    /* Removed font size override to allow modern sizing */
+  }
+
+  /* 5. Table Handling */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* 6. Charts */
+  .recharts-wrapper {
+    display: none !important;
   }
 }

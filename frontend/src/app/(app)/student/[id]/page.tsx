@@ -20,6 +20,23 @@ interface Student {
   active: boolean;
 }
 
+// --- ICONS ---
+const CalendarIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+    />
+  </svg>
+);
+
 export default function StudentPage() {
   const params = useParams();
   const router = useRouter();
@@ -69,7 +86,7 @@ export default function StudentPage() {
     }
   };
 
-  // --- STUDENT ACTIONS ---
+  // --- ACTIONS ---
 
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,8 +135,6 @@ export default function StudentPage() {
     }
   };
 
-  // --- GOAL ACTIONS ---
-
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -129,7 +144,6 @@ export default function StudentPage() {
         iep_date: iepDate,
         description,
       };
-
       if (editingGoalId) {
         await fetchFromAPI(`/goals/${editingGoalId}`, {
           method: "PUT",
@@ -141,7 +155,6 @@ export default function StudentPage() {
           body: JSON.stringify(payload),
         });
       }
-
       setIsAddingGoal(false);
       setEditingGoalId(null);
       setSubject("");
@@ -182,9 +195,8 @@ export default function StudentPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header Area */}
+      {/* Header */}
       <div className="flex justify-between items-start border-b pb-4 border-slate-200 dark:border-zinc-800">
-        {/* Left: Student Info */}
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -193,7 +205,6 @@ export default function StudentPage() {
             <button
               onClick={() => setIsEditingStudent(true)}
               className="text-slate-400 hover:text-indigo-500 transition-colors"
-              title="Edit Name/ID"
             >
               <svg
                 className="w-5 h-5"
@@ -214,13 +225,10 @@ export default function StudentPage() {
             ID: {student.student_id}
           </p>
         </div>
-
-        {/* Right: Actions */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowArchiveModal(true)}
-            className="group p-2 rounded-md transition-colors border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300 dark:border-zinc-800 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-            title="Archive Student"
+            className="group p-2 rounded-md transition-colors border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:border-zinc-800 dark:text-zinc-500 dark:hover:bg-zinc-800"
           >
             <svg
               className="w-5 h-5"
@@ -238,8 +246,7 @@ export default function StudentPage() {
           </button>
           <button
             onClick={() => setShowDeleteModal(true)}
-            className="group p-2 rounded-md transition-colors border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:border-red-900/30 dark:text-red-500/70 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-            title="Delete Student"
+            className="group p-2 rounded-md transition-colors border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 dark:border-red-900/30 dark:text-red-500/70 dark:hover:bg-red-900/20"
           >
             <svg
               className="w-5 h-5"
@@ -298,7 +305,7 @@ export default function StudentPage() {
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 rounded border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
                 />
               </div>
               <div>
@@ -310,7 +317,7 @@ export default function StudentPage() {
                   required
                   value={editId}
                   onChange={(e) => setEditId(e.target.value)}
-                  className="w-full px-3 py-2 rounded border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
                 />
               </div>
               <div className="flex gap-3 pt-2">
@@ -335,48 +342,53 @@ export default function StudentPage() {
 
       {/* Add Goal Form */}
       {isAddingGoal && (
-        <div className="p-6 rounded-lg animate-fade-in-down border shadow-sm bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
-          <h3 className="text-lg font-medium mb-4 text-slate-900 dark:text-white">
+        <div className="p-6 rounded-xl border shadow-sm bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 animate-fade-in-down">
+          <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
             {editingGoalId ? "Edit Goal" : "Add IEP Goal"}
           </h3>
           <form onSubmit={handleSaveGoal} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm mb-1 text-slate-600 dark:text-zinc-400">
+                <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
                   Subject
                 </label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Math"
-                  className="w-full rounded p-2 border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-sm mb-1 text-slate-600 dark:text-zinc-400">
+                <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
                   IEP Date
                 </label>
-                {/* FIXED CALENDAR */}
-                <input
-                  type="date"
-                  required
-                  className="w-full rounded p-2 border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white [color-scheme:light] dark:[color-scheme:dark] cursor-pointer"
-                  value={iepDate}
-                  onChange={(e) => setIepDate(e.target.value)}
-                  onClick={(e) => e.currentTarget.showPicker()}
-                />
+                {/* CUSTOM ICON + HIDDEN NATIVE ICON */}
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <CalendarIcon />
+                  </div>
+                  <input
+                    type="date"
+                    required
+                    className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white [color-scheme:light] dark:[color-scheme:dark] cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
+                    value={iepDate}
+                    onChange={(e) => setIepDate(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker()}
+                  />
+                </div>
               </div>
             </div>
             <div>
-              <label className="block text-sm mb-1 text-slate-600 dark:text-zinc-400">
+              <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
                 Goal Description
               </label>
               <textarea
                 required
                 rows={3}
-                className="w-full rounded p-2 border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -384,7 +396,7 @@ export default function StudentPage() {
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-6 py-2 rounded font-medium bg-indigo-600 text-white hover:bg-indigo-700"
+                className="px-6 py-2 rounded-md font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
               >
                 {editingGoalId ? "Update Goal" : "Save Goal"}
               </button>
@@ -403,14 +415,12 @@ export default function StudentPage() {
           goals.map((goal) => (
             <div
               key={goal.id}
-              className="p-5 rounded-lg transition-colors group border shadow-sm bg-white border-slate-200 hover:border-indigo-300 dark:bg-zinc-900 dark:border-zinc-800 dark:hover:border-zinc-600 relative"
+              className="p-6 rounded-xl border shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 relative group"
             >
-              {/* RESTORED: Goal Actions */}
               <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleEditGoalClick(goal)}
-                  className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-zinc-700 text-slate-400 hover:text-indigo-500 transition-colors"
-                  title="Edit Goal"
+                  className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-indigo-500 transition-colors"
                 >
                   <svg
                     className="w-4 h-4"
@@ -428,8 +438,7 @@ export default function StudentPage() {
                 </button>
                 <button
                   onClick={() => setGoalToDelete(goal.id)}
-                  className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
-                  title="Delete Goal"
+                  className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-red-500 transition-colors"
                 >
                   <svg
                     className="w-4 h-4"
@@ -446,9 +455,8 @@ export default function StudentPage() {
                   </svg>
                 </button>
               </div>
-
               <div className="flex justify-between items-start mb-2 pr-16">
-                <span className="text-xs font-bold px-2 py-1 rounded uppercase tracking-wide bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                <span className="text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wide bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
                   {goal.subject}
                 </span>
                 <span className="text-xs text-slate-500 dark:text-zinc-500">
@@ -484,35 +492,29 @@ export default function StudentPage() {
         )}
       </div>
 
-      {/* Confirm Archive Modal */}
       <ConfirmModal
         isOpen={showArchiveModal}
         onClose={() => setShowArchiveModal(false)}
         onConfirm={handleArchive}
         title="Archive Student?"
-        message={`Are you sure you want to archive ${student.name}? They will be hidden from the sidebar.`}
+        message={`Are you sure you want to archive ${student.name}?`}
         confirmText="Archive"
-        isDestructive={false}
       />
-
-      {/* Confirm Delete Student Modal */}
       <ConfirmModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDelete}
-        title="Permanently Delete Student?"
-        message={`WARNING: This will delete ${student.name} AND all their goals and logs. This cannot be undone.`}
+        title="Permanently Delete?"
+        message="WARNING: This will delete the student and ALL their data."
         confirmText="Delete Forever"
         isDestructive={true}
       />
-
-      {/* RESTORED: Confirm Delete Goal Modal */}
       <ConfirmModal
         isOpen={!!goalToDelete}
         onClose={() => setGoalToDelete(null)}
         onConfirm={handleDeleteGoal}
         title="Delete Goal?"
-        message="This will permanently delete this goal and ALL associated tracking logs."
+        message="This will delete this goal and ALL its logs."
         confirmText="Delete Goal"
         isDestructive={true}
       />

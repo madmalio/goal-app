@@ -14,11 +14,15 @@ interface Student {
 export default function Sidebar() {
   const [students, setStudents] = useState<Student[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [role, setRole] = useState("assistant"); // Default to assistant (safest)
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     fetchStudents();
+    // Get role from localStorage to determine if we show Settings
+    const savedRole = localStorage.getItem("user_role");
+    if (savedRole) setRole(savedRole);
   }, []);
 
   const fetchStudents = async () => {
@@ -35,6 +39,7 @@ export default function Sidebar() {
   const handleLogout = async () => {
     try {
       await fetchFromAPI("/logout", { method: "POST" });
+      localStorage.removeItem("user_role"); // Clear role on logout
       router.push("/login");
     } catch (err) {
       console.error("Logout failed", err);
@@ -180,35 +185,38 @@ export default function Sidebar() {
         </div>
 
         <div className="px-2 pb-2 space-y-1 pt-4 border-t border-slate-100 dark:border-zinc-800">
-          <Link
-            href="/settings"
-            className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all ${
-              pathname === "/settings"
-                ? "bg-slate-100 text-slate-900 dark:bg-zinc-800 dark:text-white"
-                : "text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            }`}
-          >
-            <svg
-              className="w-5 h-5 mr-3 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 dark:group-hover:text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* ONLY SHOW SETTINGS IF ADMIN */}
+          {role === "admin" && (
+            <Link
+              href="/settings"
+              className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                pathname === "/settings"
+                  ? "bg-slate-100 text-slate-900 dark:bg-zinc-800 dark:text-white"
+                  : "text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-            Settings
-          </Link>
+              <svg
+                className="w-5 h-5 mr-3 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 dark:group-hover:text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              Settings
+            </Link>
+          )}
 
           <button
             onClick={handleLogout}
@@ -232,7 +240,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Bottom Actions */}
+      {/* Bottom Actions - Also hide if assistant? Usually Assistants can add students, but if you want to restrict that, wrap this too */}
       <div
         className="p-4 border-t transition-colors
         border-slate-200 bg-slate-50 

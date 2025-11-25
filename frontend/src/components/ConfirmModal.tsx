@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+
 interface ConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -8,6 +10,7 @@ interface ConfirmModalProps {
   message: string;
   confirmText?: string;
   isDestructive?: boolean;
+  verificationText?: string;
 }
 
 export default function ConfirmModal({
@@ -18,8 +21,20 @@ export default function ConfirmModal({
   message,
   confirmText = "Confirm",
   isDestructive = false,
+  verificationText,
 }: ConfirmModalProps) {
+  const [input, setInput] = useState("");
+
+  // Reset input when modal opens/closes
+  useEffect(() => {
+    if (isOpen) setInput("");
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const isConfirmDisabled = verificationText
+    ? input !== verificationText
+    : false;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
@@ -28,6 +43,26 @@ export default function ConfirmModal({
           {title}
         </h3>
         <p className="text-slate-600 dark:text-zinc-400 mb-6">{message}</p>
+
+        {verificationText && (
+          <div className="mb-6">
+            <label className="block text-xs uppercase font-bold text-slate-500 dark:text-zinc-500 mb-1">
+              Type{" "}
+              <span className="select-all text-indigo-600 dark:text-indigo-400">
+                "{verificationText}"
+              </span>{" "}
+              to confirm
+            </label>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              // Placeholder removed for clarity
+              className="w-full px-3 py-2 border rounded-md bg-slate-50 dark:bg-zinc-950 border-slate-300 dark:border-zinc-700 focus:ring-2 focus:ring-red-500 outline-none"
+              autoFocus
+            />
+          </div>
+        )}
 
         <div className="flex gap-3 justify-end">
           <button
@@ -41,7 +76,8 @@ export default function ConfirmModal({
               onConfirm();
               onClose();
             }}
-            className={`px-4 py-2 rounded-md font-medium text-white transition-colors shadow-sm ${
+            disabled={isConfirmDisabled}
+            className={`px-4 py-2 rounded-md font-medium text-white transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
               isDestructive
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-indigo-600 hover:bg-indigo-700"
