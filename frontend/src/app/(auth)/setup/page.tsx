@@ -53,12 +53,23 @@ export default function SetupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  // FIX: Clear stale browser data when hitting the Setup page
   useEffect(() => {
+    const cleanupStaleData = () => {
+      localStorage.removeItem("teacherName");
+      localStorage.removeItem("schoolName");
+      localStorage.removeItem("user_role");
+      localStorage.removeItem("user_email");
+    };
+
     const checkStatus = async () => {
       try {
         const res = await fetchFromAPI("/status");
         if (res.is_setup === true) {
           router.replace("/login");
+        } else {
+          // If system is NOT set up, ensure browser is clean
+          cleanupStaleData();
         }
       } catch (e) {
         console.error("Status check failed", e);

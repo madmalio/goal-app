@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -72,7 +74,6 @@ func (repo *Repository) UpdateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	// FIX: Return JSON
 	w.Write([]byte(`{"message": "Student updated"}`))
 }
 
@@ -81,7 +82,6 @@ func (repo *Repository) DeleteStudent(w http.ResponseWriter, r *http.Request) {
 	tx, _ := repo.DB.Begin(context.Background())
 	defer tx.Rollback(context.Background())
 	
-	// Delete dependencies first
 	tx.Exec(context.Background(), "DELETE FROM tracking_logs WHERE goal_id IN (SELECT id FROM goals WHERE student_id = $1)", id)
 	tx.Exec(context.Background(), "DELETE FROM goals WHERE student_id = $1", id)
 	_, err := tx.Exec(context.Background(), "DELETE FROM students WHERE id = $1", id)
@@ -92,19 +92,23 @@ func (repo *Repository) DeleteStudent(w http.ResponseWriter, r *http.Request) {
 	}
 	tx.Commit(context.Background())
 	w.WriteHeader(http.StatusOK)
-	// FIX: Return JSON
 	w.Write([]byte(`{"message": "Student deleted"}`))
 }
 
-// --- GOALS ---
+// --- GOALS (UPDATED FOR MASTERY) ---
 
 func (repo *Repository) CreateGoal(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateGoalRequest
 	json.NewDecoder(r.Body).Decode(&req)
 	date, _ := time.Parse("2006-01-02", req.IEPDate)
 	
+	// Default values if missing
+	if req.MasteryScore == 0 { req.MasteryScore = 80 }
+	if req.MasteryCount == 0 { req.MasteryCount = 3 }
+
 	var newID int
-	err := repo.DB.QueryRow(context.Background(), "INSERT INTO goals (student_id, subject, iep_date, description) VALUES ($1, $2, $3, $4) RETURNING id", req.StudentID, req.Subject, date, req.Description).Scan(&newID)
+	// UPDATED SQL
+	err := repo.DB.QueryRow(context.Background(), "INSERT INTO goals (student_id, subject, iep_date, description, mastery_score, mastery_count) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id", req.StudentID, req.Subject, date, req.Description, req.MasteryScore, req.MasteryCount).Scan(&newID)
 	if err != nil {
 		http.Error(w, "Error creating goal", http.StatusInternalServerError)
 		return
@@ -114,7 +118,8 @@ func (repo *Repository) CreateGoal(w http.ResponseWriter, r *http.Request) {
 
 func (repo *Repository) GetGoals(w http.ResponseWriter, r *http.Request) {
 	sid := r.URL.Query().Get("student_id")
-	rows, err := repo.DB.Query(context.Background(), "SELECT id, student_id, subject, iep_date, description, active FROM goals WHERE student_id = $1 AND active = true ORDER BY created_at DESC", sid)
+	// UPDATED SQL
+	rows, err := repo.DB.Query(context.Background(), "SELECT id, student_id, subject, iep_date, description, active, mastery_score, mastery_count FROM goals WHERE student_id = $1 AND active = true ORDER BY created_at DESC", sid)
 	if err != nil {
 		http.Error(w, "Error fetching goals", http.StatusInternalServerError)
 		return
@@ -124,7 +129,7 @@ func (repo *Repository) GetGoals(w http.ResponseWriter, r *http.Request) {
 	goals := []models.Goal{}
 	for rows.Next() {
 		var g models.Goal
-		rows.Scan(&g.ID, &g.StudentID, &g.Subject, &g.IEPDate, &g.Description, &g.Active)
+		rows.Scan(&g.ID, &g.StudentID, &g.Subject, &g.IEPDate, &g.Description, &g.Active, &g.MasteryScore, &g.MasteryCount)
 		goals = append(goals, g)
 	}
 	if goals == nil { goals = []models.Goal{} }
@@ -133,11 +138,12 @@ func (repo *Repository) GetGoals(w http.ResponseWriter, r *http.Request) {
 
 func (repo *Repository) GetGoal(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	// UPDATED SQL
 	var g struct { models.Goal; StudentName string `json:"student_name"`; StudentIDStr string `json:"student_id_str"` }
 	
 	err := repo.DB.QueryRow(context.Background(), `
-		SELECT g.id, g.student_id, g.subject, g.iep_date, g.description, g.active, s.name, s.student_id 
-		FROM goals g JOIN students s ON g.student_id = s.id WHERE g.id = $1`, id).Scan(&g.ID, &g.StudentID, &g.Subject, &g.IEPDate, &g.Description, &g.Active, &g.StudentName, &g.StudentIDStr)
+		SELECT g.id, g.student_id, g.subject, g.iep_date, g.description, g.active, g.mastery_score, g.mastery_count, s.name, s.student_id 
+		FROM goals g JOIN students s ON g.student_id = s.id WHERE g.id = $1`, id).Scan(&g.ID, &g.StudentID, &g.Subject, &g.IEPDate, &g.Description, &g.Active, &g.MasteryScore, &g.MasteryCount, &g.StudentName, &g.StudentIDStr)
 	
 	if err != nil {
 		http.Error(w, "Goal not found", http.StatusNotFound)
@@ -152,13 +158,16 @@ func (repo *Repository) UpdateGoal(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&req)
 	date, _ := time.Parse("2006-01-02", req.IEPDate)
 
-	_, err := repo.DB.Exec(context.Background(), "UPDATE goals SET subject=$1, iep_date=$2, description=$3 WHERE id=$4", req.Subject, date, req.Description, id)
+	if req.MasteryScore == 0 { req.MasteryScore = 80 }
+	if req.MasteryCount == 0 { req.MasteryCount = 3 }
+
+	// UPDATED SQL
+	_, err := repo.DB.Exec(context.Background(), "UPDATE goals SET subject=$1, iep_date=$2, description=$3, mastery_score=$4, mastery_count=$5 WHERE id=$6", req.Subject, date, req.Description, req.MasteryScore, req.MasteryCount, id)
 	if err != nil {
 		http.Error(w, "Error updating goal", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	// FIX: Return JSON
 	w.Write([]byte(`{"message": "Goal updated"}`))
 }
 
@@ -176,8 +185,68 @@ func (repo *Repository) DeleteGoal(w http.ResponseWriter, r *http.Request) {
 	}
 	tx.Commit(context.Background())
 	w.WriteHeader(http.StatusOK)
-	// FIX: Return JSON
 	w.Write([]byte(`{"message": "Goal deleted"}`))
+}
+
+// --- CSV EXPORT ---
+
+func (repo *Repository) ExportGoalLogs(w http.ResponseWriter, r *http.Request) {
+	goalID := chi.URLParam(r, "id")
+
+	var meta struct { StudentName string; Subject string }
+	err := repo.DB.QueryRow(context.Background(), `
+		SELECT s.name, g.subject 
+		FROM goals g 
+		JOIN students s ON g.student_id = s.id 
+		WHERE g.id = $1`, goalID).Scan(&meta.StudentName, &meta.Subject)
+	
+	if err != nil {
+		http.Error(w, "Goal not found", 404)
+		return
+	}
+
+	rows, err := repo.DB.Query(context.Background(), `
+		SELECT log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, COALESCE(notes, '') 
+		FROM tracking_logs 
+		WHERE goal_id = $1 
+		ORDER BY log_date DESC, created_at DESC`, goalID)
+	
+	if err != nil {
+		http.Error(w, "Database error", 500)
+		return
+	}
+	defer rows.Close()
+
+	filename := fmt.Sprintf("%s_%s_Report.csv", meta.StudentName, meta.Subject)
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	writer.Write([]string{"Date", "Score", "Prompts", "Used Manipulatives", "Manipulative Type", "Compliance", "Behavior", "Time Spent", "Notes"})
+
+	for rows.Next() {
+		var l models.TrackingLog
+		rows.Scan(&l.LogDate, &l.Score, &l.PromptLevel, &l.ManipulativesUsed, &l.ManipulativesType, &l.Compliance, &l.Behavior, &l.TimeSpent, &l.Notes)
+		
+		usedManip := "No"
+		if l.ManipulativesUsed {
+			usedManip = "Yes"
+		}
+
+		writer.Write([]string{
+			l.LogDate.Format("2006-01-02"),
+			l.Score,
+			l.PromptLevel,
+			usedManip,
+			l.ManipulativesType,
+			l.Compliance,
+			l.Behavior,
+			l.TimeSpent,
+			l.Notes,
+		})
+	}
 }
 
 // --- LOGS ---
@@ -232,7 +301,6 @@ func (repo *Repository) UpdateLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	// FIX: Return JSON
 	w.Write([]byte(`{"message": "Log updated"}`))
 }
 
@@ -244,11 +312,10 @@ func (repo *Repository) DeleteLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	// FIX: Return JSON
 	w.Write([]byte(`{"message": "Log deleted"}`))
 }
 
-// --- DASHBOARD & BACKUP ---
+// --- DASHBOARD & BACKUP (UPDATED) ---
 
 func (repo *Repository) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 	type DashboardData struct {
@@ -288,8 +355,9 @@ func (repo *Repository) ExportBackup(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() { var s models.Student; rows.Scan(&s.ID, &s.Name, &s.StudentID, &s.Active); data.Students = append(data.Students, s) }
 	rows.Close()
 
-	rows, _ = repo.DB.Query(context.Background(), "SELECT id, student_id, subject, iep_date, description, active FROM goals")
-	for rows.Next() { var g models.Goal; rows.Scan(&g.ID, &g.StudentID, &g.Subject, &g.IEPDate, &g.Description, &g.Active); data.Goals = append(data.Goals, g) }
+	// UPDATED SQL
+	rows, _ = repo.DB.Query(context.Background(), "SELECT id, student_id, subject, iep_date, description, active, mastery_score, mastery_count FROM goals")
+	for rows.Next() { var g models.Goal; rows.Scan(&g.ID, &g.StudentID, &g.Subject, &g.IEPDate, &g.Description, &g.Active, &g.MasteryScore, &g.MasteryCount); data.Goals = append(data.Goals, g) }
 	rows.Close()
 
 	rows, _ = repo.DB.Query(context.Background(), "SELECT id, goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, COALESCE(notes, '') FROM tracking_logs")
@@ -312,7 +380,8 @@ func (repo *Repository) RestoreBackup(w http.ResponseWriter, r *http.Request) {
 
 	tx.Exec(ctx, "DELETE FROM tracking_logs"); tx.Exec(ctx, "DELETE FROM goals"); tx.Exec(ctx, "DELETE FROM students");
 	for _, s := range data.Students { tx.Exec(ctx, "INSERT INTO students (id, name, student_id, active) VALUES ($1, $2, $3, $4)", s.ID, s.Name, s.StudentID, s.Active) }
-	for _, g := range data.Goals { tx.Exec(ctx, "INSERT INTO goals (id, student_id, subject, iep_date, description, active) VALUES ($1, $2, $3, $4, $5, $6)", g.ID, g.StudentID, g.Subject, g.IEPDate, g.Description, g.Active) }
+	// UPDATED SQL
+	for _, g := range data.Goals { tx.Exec(ctx, "INSERT INTO goals (id, student_id, subject, iep_date, description, active, mastery_score, mastery_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", g.ID, g.StudentID, g.Subject, g.IEPDate, g.Description, g.Active, g.MasteryScore, g.MasteryCount) }
 	for _, l := range data.Logs { tx.Exec(ctx, "INSERT INTO tracking_logs (id, goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", l.ID, l.GoalID, l.LogDate, l.Score, l.PromptLevel, l.ManipulativesUsed, l.ManipulativesType, l.Compliance, l.Behavior, l.TimeSpent, l.Notes) }
 
 	tx.Exec(ctx, "SELECT setval('students_id_seq', (SELECT MAX(id) FROM students))")
@@ -321,9 +390,9 @@ func (repo *Repository) RestoreBackup(w http.ResponseWriter, r *http.Request) {
 
 	tx.Commit(ctx)
 	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message": "Database restored"}`))
 }
 
-// ResetDatabase wipes all data BUT KEEPS USERS
 func (repo *Repository) ResetDatabase(w http.ResponseWriter, r *http.Request) {
 	tx, _ := repo.DB.Begin(context.Background())
 	defer tx.Rollback(context.Background())
@@ -336,6 +405,5 @@ func (repo *Repository) ResetDatabase(w http.ResponseWriter, r *http.Request) {
 	
 	tx.Commit(context.Background())
 	w.WriteHeader(http.StatusOK)
-	// FIX: Return JSON
 	w.Write([]byte(`{"message": "Database wiped successfully"}`))
 }

@@ -6,39 +6,46 @@ import { fetchFromAPI } from "../../../../../../utils/api";
 import ConfirmModal from "../../../../../../components/ConfirmModal";
 import GoalChart from "../../../../../../components/GoalChart";
 
-const getPromptBadge = (level: string) => {
-  switch (level) {
-    case "Independent":
-    case "IND":
-      return {
-        label: "IND",
-        color:
-          "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800",
-      };
-    case "Verbal Prompt":
-    case "VP":
-      return {
-        label: "VP",
-        color:
-          "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800",
-      };
-    case "Visual Prompt":
-    case "VIP":
-      return {
-        label: "VIP",
-        color:
-          "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
-      };
-    case "Hand over Hand":
-    case "HOH":
-      return {
-        label: "HOH",
-        color:
-          "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800",
-      };
-    default:
-      return { label: "-", color: "text-slate-400" };
-  }
+// ... (Helper functions getPromptBadges, getBehaviorIcon, etc. remain same) ...
+// To save space, assume standard helpers are here.
+// COPY THE HELPER FUNCTIONS FROM THE PREVIOUS TURN HERE
+const getPromptBadges = (levelString: string) => {
+  if (!levelString) return [{ label: "-", color: "text-slate-400" }];
+  const levels = levelString.split(",").map((s) => s.trim());
+  return levels.map((l) => {
+    switch (l) {
+      case "Independent":
+      case "IND":
+        return {
+          label: "IND",
+          color:
+            "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800",
+        };
+      case "Verbal Prompt":
+      case "VP":
+        return {
+          label: "VP",
+          color:
+            "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800",
+        };
+      case "Visual Prompt":
+      case "VIP":
+        return {
+          label: "VIP",
+          color:
+            "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
+        };
+      case "Hand over Hand":
+      case "HOH":
+        return {
+          label: "HOH",
+          color:
+            "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800",
+        };
+      default:
+        return { label: l, color: "text-slate-500 bg-slate-100" };
+    }
+  });
 };
 
 const getBehaviorIcon = (behavior: string) => {
@@ -96,6 +103,22 @@ const CalendarIcon = () => (
   </svg>
 );
 
+const DownloadIcon = () => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+    />
+  </svg>
+);
+
 export default function TrackingPage() {
   const params = useParams();
   const goalId = params.goalId;
@@ -107,15 +130,20 @@ export default function TrackingPage() {
   const [teacherName, setTeacherName] = useState("");
   const [deleteModalId, setDeleteModalId] = useState<number | null>(null);
 
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [score, setScore] = useState("");
+  // Form State
+  const [date, setDate] = useState(new Date().toLocaleDateString("en-CA"));
+  const [scoreNum, setScoreNum] = useState("");
+  const [scoreDenom, setScoreDenom] = useState("");
   const [timeSpent, setTimeSpent] = useState("");
-  const [prompt, setPrompt] = useState("");
+  const [prompts, setPrompts] = useState<string[]>([]);
   const [compliance, setCompliance] = useState("");
   const [behavior, setBehavior] = useState("");
   const [hasManipulatives, setHasManipulatives] = useState(false);
   const [manipulativesType, setManipulativesType] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Mastery State
+  const [isMastered, setIsMastered] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -134,35 +162,85 @@ export default function TrackingPage() {
     }
   };
 
-  // Calculate Stats for Report
+  // CHECK MASTERY STATUS
+  useEffect(() => {
+    if (!logs.length || !goalInfo) return;
+
+    const target = goalInfo.mastery_score || 80;
+    const requiredCount = goalInfo.mastery_count || 3;
+
+    let streak = 0;
+    // Check latest logs first (logs are sorted DESC by date in backend)
+    for (const log of logs) {
+      let percent = 0;
+      if (log.score.includes("/")) {
+        const [n, d] = log.score.split("/").map(Number);
+        if (d > 0) percent = (n / d) * 100;
+      } else {
+        percent = parseFloat(log.score) || 0;
+      }
+
+      if (percent >= target) {
+        streak++;
+      } else {
+        break; // Streak broken
+      }
+    }
+    setIsMastered(streak >= requiredCount);
+  }, [logs, goalInfo]);
+
   const stats = useMemo(() => {
     if (!logs.length) return { average: "N/A", count: 0 };
-    let total = 0;
+    let totalPercent = 0;
     let count = 0;
     logs.forEach((l) => {
-      const val = parseFloat(l.score);
-      if (!isNaN(val)) {
-        total += val;
-        count++;
+      if (l.score && l.score.includes("/")) {
+        const [num, den] = l.score.split("/").map(Number);
+        if (!isNaN(num) && !isNaN(den) && den > 0) {
+          totalPercent += num / den;
+          count++;
+        }
+      } else {
+        const val = parseFloat(l.score);
+        if (!isNaN(val)) {
+          totalPercent += val / 100;
+          count++;
+        }
       }
     });
     return {
       count: logs.length,
-      average: count > 0 ? Math.round(total / count) + "%" : "N/A",
+      average:
+        count > 0 ? Math.round((totalPercent / count) * 100) + "%" : "N/A",
     };
   }, [logs]);
 
+  // ... (Edit, Delete, Submit Handlers remain same - assume included) ...
   const handleEditClick = (log: any) => {
     setEditingId(log.id);
     setDate(log.log_date.split("T")[0]);
-    setScore(log.score);
+    if (log.score.includes("/")) {
+      const [n, d] = log.score.split("/");
+      setScoreNum(n);
+      setScoreDenom(d);
+    } else {
+      setScoreNum(log.score);
+      setScoreDenom("");
+    }
     setTimeSpent(log.time_spent);
-    setPrompt(log.prompt_level);
+    setPrompts(log.prompt_level ? log.prompt_level.split(", ") : []);
     setCompliance(log.compliance);
     setBehavior(log.behavior);
     setHasManipulatives(log.manipulatives_used);
     setManipulativesType(log.manipulatives_type);
     setNotes(log.notes || "");
+  };
+
+  const togglePrompt = (p: string) => {
+    setPrompts((prev) => {
+      if (prev.includes(p)) return prev.filter((item) => item !== p);
+      return [...prev, p];
+    });
   };
 
   const handleDeleteClick = (id: number) => setDeleteModalId(id);
@@ -186,25 +264,30 @@ export default function TrackingPage() {
   };
 
   const resetForm = () => {
-    setScore("");
+    setScoreNum("");
+    setScoreDenom("");
     setTimeSpent("");
-    setPrompt("");
+    setPrompts([]);
     setCompliance("");
     setBehavior("");
     setHasManipulatives(false);
     setManipulativesType("");
     setNotes("");
+    setDate(new Date().toLocaleDateString("en-CA"));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const finalScore =
+        scoreNum && scoreDenom ? `${scoreNum}/${scoreDenom}` : scoreNum;
+      const finalPrompts = prompts.join(", ");
       const payload = {
         goal_id: Number(goalId),
         log_date: date,
-        score,
+        score: finalScore,
         time_spent: timeSpent,
-        prompt_level: prompt,
+        prompt_level: finalPrompts,
         compliance,
         behavior,
         manipulatives_used: hasManipulatives,
@@ -230,11 +313,34 @@ export default function TrackingPage() {
     }
   };
 
+  const handleExportCSV = async () => {
+    try {
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081/api";
+      const res = await fetch(`${API_URL}/goals/${goalId}/export`, {
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Goal_Report_${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      alert("Failed to export CSV");
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* --- MODERN PRINT REPORT LAYOUT --- */}
+      {/* --- PRINT LAYOUT --- */}
       <div className="hidden print:block font-sans text-black p-10">
-        {/* Header */}
+        {/* ... (Same Print Layout as before) ... */}
         <div className="border-b-2 border-slate-300 pb-4 mb-6 flex justify-between items-end">
           <div>
             <h1 className="text-3xl font-bold tracking-tight mb-1">
@@ -250,12 +356,9 @@ export default function TrackingPage() {
             </p>
           </div>
         </div>
-
         {goalInfo && (
           <div className="mb-8">
-            {/* Student / Goal Grid - UPDATED LAYOUT */}
             <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-8 border border-slate-200 rounded-lg p-6">
-              {/* Row 1: Student Info */}
               <div>
                 <span className="block text-xs uppercase font-bold text-slate-400 mb-1">
                   Student Name
@@ -270,8 +373,6 @@ export default function TrackingPage() {
                 </span>
                 <span className="block text-xl">{goalInfo.student_id_str}</span>
               </div>
-
-              {/* Row 2: Goal & Date */}
               <div>
                 <span className="block text-xs uppercase font-bold text-slate-400 mb-1">
                   Goal / Subject
@@ -285,11 +386,11 @@ export default function TrackingPage() {
                   IEP Date
                 </span>
                 <span className="block text-xl">
-                  {new Date(goalInfo.iep_date).toLocaleDateString()}
+                  {new Date(goalInfo.iep_date).toLocaleDateString(undefined, {
+                    timeZone: "UTC",
+                  })}
                 </span>
               </div>
-
-              {/* Row 3: Description */}
               <div className="col-span-2 border-t border-slate-100 pt-4 mt-2">
                 <span className="block text-xs uppercase font-bold text-slate-400 mb-1">
                   Goal Description
@@ -300,7 +401,19 @@ export default function TrackingPage() {
               </div>
             </div>
 
-            {/* Summary Stats */}
+            {/* PRINT MASTERY STATUS */}
+            {isMastered && (
+              <div className="mb-8 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                <h3 className="text-emerald-700 font-bold uppercase tracking-wider text-sm">
+                  Goal Mastered
+                </h3>
+                <p className="text-emerald-600 text-sm">
+                  Student has met the criteria of {goalInfo.mastery_score}%
+                  accuracy over {goalInfo.mastery_count} consecutive sessions.
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-8 mb-8 bg-slate-50 p-6 rounded-lg border border-slate-100">
               <div>
                 <span className="text-xs uppercase font-bold text-slate-500">
@@ -310,15 +423,13 @@ export default function TrackingPage() {
               </div>
               <div>
                 <span className="text-xs uppercase font-bold text-slate-500">
-                  Average Score
+                  Average Accuracy
                 </span>
                 <div className="mt-1 font-bold text-3xl text-indigo-600">
                   {stats.average}
                 </div>
               </div>
             </div>
-
-            {/* Data Table */}
             <table className="w-full text-sm mb-8">
               <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-xs">
                 <tr>
@@ -331,41 +442,52 @@ export default function TrackingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {logs.map((log) => (
-                  <Fragment key={log.id}>
-                    <tr>
-                      <td className="p-3 whitespace-nowrap font-medium">
-                        {new Date(log.log_date).toLocaleDateString()}
-                      </td>
-                      <td className="p-3 font-bold">{log.score}</td>
-                      <td className="p-3">{log.prompt_level || "-"}</td>
-                      <td className="p-3">
-                        {log.manipulatives_used
-                          ? `Yes (${log.manipulatives_type})`
-                          : "No"}
-                      </td>
-                      <td className="p-3">
-                        {log.compliance} / {log.behavior}
-                      </td>
-                      <td className="p-3">{log.time_spent || "-"}</td>
-                    </tr>
-                    {log.notes && (
-                      <tr className="bg-slate-50/50">
-                        <td
-                          colSpan={6}
-                          className="p-3 italic text-xs text-slate-500 pl-8"
-                        >
-                          <span className="font-bold not-italic">Note:</span>{" "}
-                          {log.notes}
+                {logs.map((log) => {
+                  const promptBadges = getPromptBadges(log.prompt_level);
+                  return (
+                    <Fragment key={log.id}>
+                      <tr>
+                        <td className="p-3 whitespace-nowrap font-medium">
+                          {new Date(log.log_date).toLocaleDateString(
+                            undefined,
+                            { timeZone: "UTC" }
+                          )}
                         </td>
+                        <td className="p-3 font-bold">{log.score}</td>
+                        <td className="p-3 flex gap-1">
+                          {promptBadges.map((b, i) => (
+                            <span
+                              key={i}
+                              className="text-xs border px-1 rounded"
+                            >
+                              {b.label}
+                            </span>
+                          ))}
+                        </td>
+                        <td className="p-3">
+                          {log.manipulatives_used ? `Yes` : "No"}
+                        </td>
+                        <td className="p-3">
+                          {log.compliance} / {log.behavior}
+                        </td>
+                        <td className="p-3">{log.time_spent || "-"}</td>
                       </tr>
-                    )}
-                  </Fragment>
-                ))}
+                      {log.notes && (
+                        <tr className="bg-slate-50/50">
+                          <td
+                            colSpan={6}
+                            className="p-3 italic text-xs text-slate-500 pl-8"
+                          >
+                            <span className="font-bold not-italic">Note:</span>{" "}
+                            {log.notes}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
-
-            {/* PRINT FOOTER LEGEND (COMPACT ONE LINE) */}
             <div className="border-t border-slate-300 pt-2 text-xs text-slate-500 text-center">
               <span className="mx-2">
                 <strong>HOH</strong> = Hand over Hand
@@ -383,9 +505,7 @@ export default function TrackingPage() {
           </div>
         )}
       </div>
-      {/* --- END PRINT LAYOUT --- */}
 
-      {/* WEB HEADER */}
       <div className="flex items-center justify-between mb-6 print:hidden">
         <div className="flex items-center space-x-4">
           <button
@@ -397,30 +517,44 @@ export default function TrackingPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
             Track Progress
           </h1>
+          {/* WEB MASTERY BADGE */}
+          {isMastered && (
+            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-wide rounded-full border border-emerald-200 animate-pulse">
+              Goal Mastered!
+            </span>
+          )}
         </div>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:border-zinc-700"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:border-zinc-700"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2-4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-            />
-          </svg>{" "}
-          Print Report
-        </button>
+            <DownloadIcon /> Export CSV
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:border-zinc-700"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2-4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+              />
+            </svg>{" "}
+            Print Report
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 block print:block">
-        {/* INPUT FORM */}
+        {/* INPUT FORM (Same as before) */}
         <div className="lg:col-span-7 space-y-6 print:hidden">
           <form
             onSubmit={handleSubmit}
@@ -445,7 +579,6 @@ export default function TrackingPage() {
                 <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
                   Date
                 </label>
-                {/* CUSTOM ICON + HIDDEN NATIVE ICON */}
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                     <CalendarIcon />
@@ -474,34 +607,43 @@ export default function TrackingPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
-                  Score / Data
+                  Score (Correct / Total)
                 </label>
-                <input
-                  type="text"
-                  value={score}
-                  onChange={(e) => setScore(e.target.value)}
-                  placeholder="e.g. 80%"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={scoreNum}
+                    onChange={(e) => setScoreNum(e.target.value)}
+                    placeholder="20"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center"
+                  />
+                  <span className="text-slate-400 font-bold text-xl">/</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={scoreDenom}
+                    onChange={(e) => setScoreDenom(e.target.value)}
+                    placeholder="25"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center"
+                  />
+                </div>
               </div>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2">
-                Prompts Used
+                Prompts Used (Select all that apply)
               </label>
               <div className="flex gap-2">
                 {["HOH", "VIP", "VP", "Independent"].map((p) => (
                   <ToggleBtn
                     key={p}
                     label={p}
-                    selected={prompt === p}
-                    onClick={() => setPrompt(p)}
+                    selected={prompts.includes(p)}
+                    onClick={() => togglePrompt(p)}
                   />
                 ))}
               </div>
-
-              {/* PROMPT LEGEND (WEB VIEW) */}
               <div className="mt-3 text-xs text-slate-500 bg-slate-50 dark:bg-zinc-800 border border-slate-100 dark:border-zinc-700 rounded-md p-2 flex flex-wrap gap-x-4 gap-y-1 justify-center">
                 <span className="flex items-center gap-1">
                   <span className="font-bold text-slate-700 dark:text-zinc-300">
@@ -529,7 +671,6 @@ export default function TrackingPage() {
                 </span>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2">
@@ -625,7 +766,8 @@ export default function TrackingPage() {
 
         <div className="lg:col-span-5 rounded-xl overflow-hidden flex flex-col h-[650px] shadow-sm border bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 print:w-full print:h-auto print:bg-white print:border-0 print:shadow-none print:block">
           <div className="print:hidden bg-slate-50 border-b border-slate-200 dark:bg-zinc-950 dark:border-zinc-800">
-            <GoalChart logs={logs} />
+            {/* FIX: Pass Target Score to Chart */}
+            <GoalChart logs={logs} targetScore={goalInfo?.mastery_score} />
             <div className="p-4 border-t border-slate-200 dark:border-zinc-800">
               <h3 className="font-medium text-slate-900 dark:text-white">
                 History Log
@@ -653,8 +795,8 @@ export default function TrackingPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
                 {logs.map((log) => {
-                  const promptBadge = getPromptBadge(log.prompt_level);
                   const behaviorIcon = getBehaviorIcon(log.behavior);
+                  const promptBadges = getPromptBadges(log.prompt_level);
                   return (
                     <tr
                       key={log.id}
@@ -668,7 +810,11 @@ export default function TrackingPage() {
                         <div>
                           {new Date(log.log_date).toLocaleDateString(
                             undefined,
-                            { month: "numeric", day: "numeric" }
+                            {
+                              month: "numeric",
+                              day: "numeric",
+                              timeZone: "UTC",
+                            }
                           )}
                         </div>
                         {log.time_spent && (
@@ -682,18 +828,15 @@ export default function TrackingPage() {
                           {log.score}
                         </span>
                       </td>
-                      <td className="p-3">
-                        {log.prompt_level ? (
+                      <td className="p-3 flex flex-wrap gap-1">
+                        {promptBadges.map((badge, i) => (
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${promptBadge.color}`}
+                            key={i}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${badge.color}`}
                           >
-                            {promptBadge.label}
+                            {badge.label}
                           </span>
-                        ) : (
-                          <span className="text-slate-400 dark:text-zinc-700">
-                            -
-                          </span>
-                        )}
+                        ))}
                       </td>
                       <td className="p-3 text-xs">
                         <div className="flex flex-col gap-1">

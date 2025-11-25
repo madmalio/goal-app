@@ -11,6 +11,8 @@ interface Goal {
   subject: string;
   iep_date: string;
   description: string;
+  mastery_score: number;
+  mastery_count: number;
 }
 
 interface Student {
@@ -45,22 +47,22 @@ export default function StudentPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
 
-  // UI States
   const [isAddingGoal, setIsAddingGoal] = useState(false);
   const [isEditingStudent, setIsEditingStudent] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<number | null>(null);
 
-  // Modals
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [goalToDelete, setGoalToDelete] = useState<number | null>(null);
 
-  // Form States
   const [subject, setSubject] = useState("");
   const [iepDate, setIepDate] = useState("");
   const [description, setDescription] = useState("");
 
-  // Edit Student Form
+  // New Fields
+  const [masteryScore, setMasteryScore] = useState(80);
+  const [masteryCount, setMasteryCount] = useState(3);
+
   const [editName, setEditName] = useState("");
   const [editId, setEditId] = useState("");
 
@@ -85,8 +87,6 @@ export default function StudentPage() {
       console.error("Failed to load data", error);
     }
   };
-
-  // --- ACTIONS ---
 
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,7 +143,10 @@ export default function StudentPage() {
         subject,
         iep_date: iepDate,
         description,
+        mastery_score: Number(masteryScore),
+        mastery_count: Number(masteryCount),
       };
+
       if (editingGoalId) {
         await fetchFromAPI(`/goals/${editingGoalId}`, {
           method: "PUT",
@@ -155,11 +158,14 @@ export default function StudentPage() {
           body: JSON.stringify(payload),
         });
       }
+
       setIsAddingGoal(false);
       setEditingGoalId(null);
       setSubject("");
       setIepDate("");
       setDescription("");
+      setMasteryScore(80);
+      setMasteryCount(3);
       loadData();
     } catch (err) {
       alert("Failed to save goal");
@@ -171,6 +177,8 @@ export default function StudentPage() {
     setSubject(goal.subject);
     setIepDate(goal.iep_date.split("T")[0]);
     setDescription(goal.description);
+    setMasteryScore(goal.mastery_score);
+    setMasteryCount(goal.mastery_count);
     setIsAddingGoal(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -195,7 +203,6 @@ export default function StudentPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-start border-b pb-4 border-slate-200 dark:border-zinc-800">
         <div>
           <div className="flex items-center gap-3">
@@ -288,7 +295,6 @@ export default function StudentPage() {
         </div>
       </div>
 
-      {/* Edit Student Modal */}
       {isEditingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-xl shadow-2xl border border-slate-200 dark:border-zinc-800 p-6">
@@ -305,7 +311,7 @@ export default function StudentPage() {
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                  className="w-full px-3 py-2 rounded-md border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
                 />
               </div>
               <div>
@@ -317,7 +323,7 @@ export default function StudentPage() {
                   required
                   value={editId}
                   onChange={(e) => setEditId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                  className="w-full px-3 py-2 rounded-md border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
                 />
               </div>
               <div className="flex gap-3 pt-2">
@@ -340,7 +346,6 @@ export default function StudentPage() {
         </div>
       )}
 
-      {/* Add Goal Form */}
       {isAddingGoal && (
         <div className="p-6 rounded-xl border shadow-sm bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 animate-fade-in-down">
           <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
@@ -365,7 +370,6 @@ export default function StudentPage() {
                 <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
                   IEP Date
                 </label>
-                {/* CUSTOM ICON + HIDDEN NATIVE ICON */}
                 <div className="relative">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                     <CalendarIcon />
@@ -379,6 +383,35 @@ export default function StudentPage() {
                     onClick={(e) => e.currentTarget.showPicker()}
                   />
                 </div>
+              </div>
+            </div>
+            {/* MASTERY CRITERIA INPUTS */}
+            <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-md border border-slate-200 dark:border-zinc-800">
+              <div>
+                <label className="block text-xs uppercase font-bold text-slate-500 dark:text-zinc-400 mb-1">
+                  Mastery Target (%)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={masteryScore}
+                  onChange={(e) => setMasteryScore(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-xs uppercase font-bold text-slate-500 dark:text-zinc-400 mb-1">
+                  Consecutive Sessions
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={masteryCount}
+                  onChange={(e) => setMasteryCount(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md"
+                />
               </div>
             </div>
             <div>
@@ -405,7 +438,6 @@ export default function StudentPage() {
         </div>
       )}
 
-      {/* Goals List */}
       <div className="grid gap-4">
         {goals.length === 0 ? (
           <p className="text-slate-500 dark:text-zinc-600 italic">
@@ -460,12 +492,24 @@ export default function StudentPage() {
                   {goal.subject}
                 </span>
                 <span className="text-xs text-slate-500 dark:text-zinc-500">
-                  IEP Date: {new Date(goal.iep_date).toLocaleDateString()}
+                  IEP Date:{" "}
+                  {new Date(goal.iep_date).toLocaleDateString(undefined, {
+                    timeZone: "UTC",
+                  })}
                 </span>
               </div>
               <p className="text-lg leading-snug text-slate-800 dark:text-zinc-200">
                 {goal.description}
               </p>
+              {/* MASTERY BADGE PREVIEW (Optional) */}
+              <div className="mt-3 text-xs text-slate-400 flex gap-4">
+                <span>
+                  Target: <strong>{goal.mastery_score}%</strong>
+                </span>
+                <span>
+                  Duration: <strong>{goal.mastery_count} sessions</strong>
+                </span>
+              </div>
               <Link
                 href={`/student/${studentId}/goal/${goal.id}`}
                 className="mt-4 pt-4 border-t flex justify-end block border-slate-100 dark:border-zinc-800"

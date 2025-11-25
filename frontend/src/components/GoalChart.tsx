@@ -8,37 +8,40 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 
-// Helper to parse "8/10", "80%", or "80" into a number
 const parseScore = (score: string): number | null => {
   if (!score) return null;
   const clean = score.trim().replace("%", "");
-
-  // Handle "8/10" fraction format
   if (clean.includes("/")) {
     const [num, den] = clean.split("/");
-    return (parseFloat(num) / parseFloat(den)) * 100;
+    if (parseFloat(den) === 0) return 0;
+    return Math.round((parseFloat(num) / parseFloat(den)) * 100);
   }
-
-  // Handle standard number
   const val = parseFloat(clean);
   return isNaN(val) ? null : val;
 };
 
-export default function GoalChart({ logs }: { logs: any[] }) {
-  // 1. Prepare Data: Reverse logs (Oldest -> Newest) and parse scores
+export default function GoalChart({
+  logs,
+  targetScore,
+}: {
+  logs: any[];
+  targetScore?: number;
+}) {
   const data = [...logs]
     .reverse()
     .map((log) => ({
       date: new Date(log.log_date).toLocaleDateString(undefined, {
         month: "numeric",
         day: "numeric",
+        timeZone: "UTC",
       }),
       score: parseScore(log.score),
-      originalScore: log.score, // Keep text for tooltip
+      originalScore: log.score,
     }))
-    .filter((d) => d.score !== null); // Remove non-numeric entries
+    .filter((d) => d.score !== null);
 
   if (data.length < 2) {
     return (
@@ -70,7 +73,7 @@ export default function GoalChart({ logs }: { logs: any[] }) {
             fontSize={10}
             tickLine={false}
             axisLine={false}
-            domain={[0, 100]} // Assumes 0-100 scale, remove if using raw counts
+            domain={[0, 100]}
             hide
           />
           <Tooltip
@@ -86,10 +89,23 @@ export default function GoalChart({ logs }: { logs: any[] }) {
               "Score",
             ]}
           />
+          {targetScore && (
+            <ReferenceLine
+              y={targetScore}
+              stroke="#ef4444"
+              strokeDasharray="3 3"
+              label={{
+                value: `Target: ${targetScore}%`,
+                fill: "#ef4444",
+                fontSize: 10,
+                position: "insideBottomRight",
+              }}
+            />
+          )}
           <Line
             type="monotone"
             dataKey="score"
-            stroke="#6366f1" // Indigo-500
+            stroke="#6366f1"
             strokeWidth={3}
             dot={{ fill: "#fff", stroke: "#6366f1", strokeWidth: 2, r: 4 }}
             activeDot={{ r: 6, fill: "#6366f1" }}
