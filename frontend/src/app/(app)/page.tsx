@@ -4,16 +4,16 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { fetchFromAPI } from "../../utils/api";
+import { usePrivacy } from "../../context/PrivacyContext";
 
 export default function Dashboard() {
-  // Updated State Interface
+  const { isPrivacyMode } = usePrivacy();
   const [data, setData] = useState({
     student_count: 0,
     active_goals: 0,
     logs_this_week: 0,
     recent_logs: [] as any[],
   });
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentId, setNewStudentId] = useState("");
@@ -63,20 +63,16 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 max-w-6xl">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
             Dashboard
           </h1>
-          <p className="text-slate-500 dark:text-zinc-400">
-            Welcome back, Admin.
-          </p>
+          <p className="text-slate-500 dark:text-zinc-400">Welcome back.</p>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2 rounded-md font-medium transition-colors shadow-sm flex items-center gap-2
-          bg-indigo-600 hover:bg-indigo-700 text-white"
+          className="px-4 py-2 rounded-md font-medium transition-colors shadow-sm flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
         >
           <span>+</span> Add New Student
         </button>
@@ -105,7 +101,12 @@ export default function Dashboard() {
               <p className="text-sm font-medium text-slate-500 dark:text-zinc-400">
                 Total Students
               </p>
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
+              {/* PRIVACY BLUR APPLIED */}
+              <h3
+                className={`text-2xl font-bold text-slate-900 dark:text-white ${
+                  isPrivacyMode ? "privacy-blur" : ""
+                }`}
+              >
                 {data.student_count}
               </h3>
             </div>
@@ -170,7 +171,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* NEW: Recent Activity Feed */}
+        {/* Recent Activity Feed */}
         <div className="p-6 rounded-xl border shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
           <h3 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">
             Recent Activity
@@ -183,12 +184,15 @@ export default function Dashboard() {
                 <Link
                   key={i}
                   href={`/student/${log.student_id}/goal/${log.goal_id}`}
-                  className="flex items-center justify-between p-3 rounded-lg border transition-colors
-                            bg-slate-50 border-slate-100 hover:bg-slate-100 hover:border-slate-200
-                            dark:bg-zinc-950 dark:border-zinc-800 dark:hover:bg-zinc-800 dark:hover:border-zinc-700"
+                  className="flex items-center justify-between p-3 rounded-lg border transition-colors bg-slate-50 border-slate-100 hover:bg-slate-100 hover:border-slate-200 dark:bg-zinc-950 dark:border-zinc-800 dark:hover:bg-zinc-800 dark:hover:border-zinc-700"
                 >
                   <div>
-                    <p className="font-semibold text-sm text-slate-900 dark:text-white">
+                    {/* PRIVACY BLUR ON NAMES */}
+                    <p
+                      className={`font-semibold text-sm text-slate-900 dark:text-white ${
+                        isPrivacyMode ? "privacy-blur" : ""
+                      }`}
+                    >
                       {log.student_name}
                     </p>
                     <p className="text-xs text-slate-500 dark:text-zinc-400">
@@ -196,7 +200,12 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                    {/* PRIVACY BLUR ON SCORES */}
+                    <span
+                      className={`text-sm font-bold text-indigo-600 dark:text-indigo-400 ${
+                        isPrivacyMode ? "privacy-blur" : ""
+                      }`}
+                    >
                       {log.score}
                     </span>
                     <svg
@@ -219,7 +228,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Quick Tips (Moved to right column) */}
         <div className="p-6 rounded-xl border shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 h-fit">
           <h3 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">
             Quick Tips
@@ -240,10 +248,7 @@ export default function Dashboard() {
       {/* ADD STUDENT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div
-            className="w-full max-w-md rounded-xl shadow-2xl border p-6 animate-fade-in-up
-            bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800"
-          >
+          <div className="w-full max-w-md rounded-xl shadow-2xl border p-6 animate-fade-in-up bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
             <h2 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">
               Add New Student
             </h2>

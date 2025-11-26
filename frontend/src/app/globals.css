@@ -34,6 +34,18 @@
   opacity: 1;
 }
 
+/* --- PRIVACY CURTAIN STYLES --- */
+.privacy-blur {
+  filter: blur(6px);
+  transition: filter 0.2s ease;
+  user-select: none; /* Prevents highlighting blurred text */
+  cursor: help;
+}
+
+.privacy-blur:hover {
+  filter: blur(0);
+}
+
 /* --- PROFESSIONAL PRINT STYLES --- */
 @media print {
   /* 1. Reset Colors to Ink-Friendly Black/White */
@@ -79,7 +91,6 @@
   th,
   span {
     color: black !important;
-    /* Removed font size override to allow modern sizing */
   }
 
   /* 5. Table Handling */

@@ -16,29 +16,29 @@ type Goal struct {
 	IEPDate      time.Time `json:"iep_date"`
 	Description  string    `json:"description"`
 	Active       bool      `json:"active"`
-	MasteryScore int       `json:"mastery_score"` // New: e.g. 80
-	MasteryCount int       `json:"mastery_count"` // New: e.g. 3
+	MasteryScore int       `json:"mastery_score"`
+	MasteryCount int       `json:"mastery_count"`
 }
 
-// CreateStudentRequest defines what we expect from the Frontend
 type CreateStudentRequest struct {
 	Name      string `json:"name"`
 	StudentID string `json:"student_id"`
 }
 
-// CreateGoalRequest defines what we expect when adding a goal
 type CreateGoalRequest struct {
 	StudentID    int    `json:"student_id"`
 	Subject      string `json:"subject"`
-	IEPDate      string `json:"iep_date"` // Received as string "YYYY-MM-DD"
+	IEPDate      string `json:"iep_date"`
 	Description  string `json:"description"`
-	MasteryScore int    `json:"mastery_score"` // New
-	MasteryCount int    `json:"mastery_count"` // New
+	MasteryScore int    `json:"mastery_score"`
+	MasteryCount int    `json:"mastery_count"`
 }
 
 type TrackingLog struct {
 	ID                int       `json:"id"`
 	GoalID            int       `json:"goal_id"`
+	UserID            int       `json:"user_id"`
+	TesterName        string    `json:"tester_name"` 
 	LogDate           time.Time `json:"log_date"`
 	Score             string    `json:"score"`
 	PromptLevel       string    `json:"prompt_level"`
@@ -68,9 +68,18 @@ type User struct {
 	Email        string `json:"email"`
 	PasswordHash string `json:"-"`
 	Role         string `json:"role"`
+	FullName     string `json:"full_name"`
+	SchoolName   string `json:"school_name"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	FullName   string `json:"full_name"`
+	SchoolName string `json:"school_name"`
+}
+
+type UpdateProfileRequest struct {
+	FullName   string `json:"full_name"`
+	SchoolName string `json:"school_name"`
 }

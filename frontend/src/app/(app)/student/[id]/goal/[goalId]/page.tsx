@@ -6,9 +6,17 @@ import { fetchFromAPI } from "../../../../../../utils/api";
 import ConfirmModal from "../../../../../../components/ConfirmModal";
 import GoalChart from "../../../../../../components/GoalChart";
 
-// ... (Helper functions getPromptBadges, getBehaviorIcon, etc. remain same) ...
-// To save space, assume standard helpers are here.
-// COPY THE HELPER FUNCTIONS FROM THE PREVIOUS TURN HERE
+// Helper to get initials "Mark Barela" -> "MB"
+const getInitials = (name: string) => {
+  if (!name) return "-";
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .substring(0, 2);
+};
+
 const getPromptBadges = (levelString: string) => {
   if (!levelString) return [{ label: "-", color: "text-slate-400" }];
   const levels = levelString.split(",").map((s) => s.trim());
@@ -127,10 +135,9 @@ export default function TrackingPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [goalInfo, setGoalInfo] = useState<any>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [teacherName, setTeacherName] = useState("");
+  const [schoolName, setSchoolName] = useState(""); // NEW: For Print Header
   const [deleteModalId, setDeleteModalId] = useState<number | null>(null);
 
-  // Form State
   const [date, setDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [scoreNum, setScoreNum] = useState("");
   const [scoreDenom, setScoreDenom] = useState("");
@@ -142,13 +149,14 @@ export default function TrackingPage() {
   const [manipulativesType, setManipulativesType] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Mastery State
   const [isMastered, setIsMastered] = useState(false);
 
   useEffect(() => {
+    // Fetch User Profile to get School Name
+    fetchFromAPI("/user/profile")
+      .then((u) => setSchoolName(u.school_name))
+      .catch(() => {});
     loadData();
-    const savedTeacher = localStorage.getItem("teacherName");
-    if (savedTeacher) setTeacherName(savedTeacher);
   }, [goalId]);
 
   const loadData = async () => {
@@ -162,15 +170,11 @@ export default function TrackingPage() {
     }
   };
 
-  // CHECK MASTERY STATUS
   useEffect(() => {
     if (!logs.length || !goalInfo) return;
-
     const target = goalInfo.mastery_score || 80;
     const requiredCount = goalInfo.mastery_count || 3;
-
     let streak = 0;
-    // Check latest logs first (logs are sorted DESC by date in backend)
     for (const log of logs) {
       let percent = 0;
       if (log.score.includes("/")) {
@@ -179,12 +183,8 @@ export default function TrackingPage() {
       } else {
         percent = parseFloat(log.score) || 0;
       }
-
-      if (percent >= target) {
-        streak++;
-      } else {
-        break; // Streak broken
-      }
+      if (percent >= target) streak++;
+      else break;
     }
     setIsMastered(streak >= requiredCount);
   }, [logs, goalInfo]);
@@ -215,7 +215,6 @@ export default function TrackingPage() {
     };
   }, [logs]);
 
-  // ... (Edit, Delete, Submit Handlers remain same - assume included) ...
   const handleEditClick = (log: any) => {
     setEditingId(log.id);
     setDate(log.log_date.split("T")[0]);
@@ -340,22 +339,23 @@ export default function TrackingPage() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* --- PRINT LAYOUT --- */}
       <div className="hidden print:block font-sans text-black p-10">
-        {/* ... (Same Print Layout as before) ... */}
         <div className="border-b-2 border-slate-300 pb-4 mb-6 flex justify-between items-end">
           <div>
             <h1 className="text-3xl font-bold tracking-tight mb-1">
               Progress Report
             </h1>
           </div>
+          {/* HEADER NOW USES SCHOOL NAME */}
           <div className="text-right">
             <p className="text-sm font-bold">
               Generated: {new Date().toLocaleDateString()}
             </p>
             <p className="text-sm text-slate-600">
-              Provider: {teacherName || "________________"}
+              {schoolName || "Goal Master"}
             </p>
           </div>
         </div>
+
         {goalInfo && (
           <div className="mb-8">
             <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-8 border border-slate-200 rounded-lg p-6">
@@ -401,7 +401,6 @@ export default function TrackingPage() {
               </div>
             </div>
 
-            {/* PRINT MASTERY STATUS */}
             {isMastered && (
               <div className="mb-8 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
                 <h3 className="text-emerald-700 font-bold uppercase tracking-wider text-sm">
@@ -430,6 +429,8 @@ export default function TrackingPage() {
                 </div>
               </div>
             </div>
+
+            {/* TABLE with TESTER Column */}
             <table className="w-full text-sm mb-8">
               <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-xs">
                 <tr>
@@ -438,54 +439,55 @@ export default function TrackingPage() {
                   <th className="p-3 text-left">Prompts</th>
                   <th className="p-3 text-left">Support</th>
                   <th className="p-3 text-left">Compliance</th>
-                  <th className="p-3 text-left rounded-r-md">Time</th>
+                  <th className="p-3 text-left">Time</th>
+                  <th className="p-3 text-center rounded-r-md">Tester</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {logs.map((log) => {
-                  const promptBadges = getPromptBadges(log.prompt_level);
-                  return (
-                    <Fragment key={log.id}>
-                      <tr>
-                        <td className="p-3 whitespace-nowrap font-medium">
-                          {new Date(log.log_date).toLocaleDateString(
-                            undefined,
-                            { timeZone: "UTC" }
-                          )}
+                {logs.map((log) => (
+                  <Fragment key={log.id}>
+                    <tr>
+                      <td className="p-3 whitespace-nowrap font-medium">
+                        {new Date(log.log_date).toLocaleDateString(undefined, {
+                          timeZone: "UTC",
+                        })}
+                      </td>
+                      <td className="p-3 font-bold">{log.score}</td>
+                      <td className="p-3 flex gap-1">
+                        {getPromptBadges(log.prompt_level).map((b, i) => (
+                          <span key={i} className="text-xs border px-1 rounded">
+                            {b.label}
+                          </span>
+                        ))}
+                      </td>
+                      <td className="p-3">
+                        {log.manipulatives_used ? `Yes` : "No"}
+                      </td>
+                      <td className="p-3">
+                        {log.compliance} / {log.behavior}
+                      </td>
+                      <td className="p-3">{log.time_spent || "-"}</td>
+                      {/* TESTER INITIALS */}
+                      <td
+                        className="p-3 text-center text-slate-400 font-mono text-xs"
+                        title={log.tester_name}
+                      >
+                        {getInitials(log.tester_name)}
+                      </td>
+                    </tr>
+                    {log.notes && (
+                      <tr className="bg-slate-50/50">
+                        <td
+                          colSpan={7}
+                          className="p-3 italic text-xs text-slate-500 pl-8"
+                        >
+                          <span className="font-bold not-italic">Note:</span>{" "}
+                          {log.notes}
                         </td>
-                        <td className="p-3 font-bold">{log.score}</td>
-                        <td className="p-3 flex gap-1">
-                          {promptBadges.map((b, i) => (
-                            <span
-                              key={i}
-                              className="text-xs border px-1 rounded"
-                            >
-                              {b.label}
-                            </span>
-                          ))}
-                        </td>
-                        <td className="p-3">
-                          {log.manipulatives_used ? `Yes` : "No"}
-                        </td>
-                        <td className="p-3">
-                          {log.compliance} / {log.behavior}
-                        </td>
-                        <td className="p-3">{log.time_spent || "-"}</td>
                       </tr>
-                      {log.notes && (
-                        <tr className="bg-slate-50/50">
-                          <td
-                            colSpan={6}
-                            className="p-3 italic text-xs text-slate-500 pl-8"
-                          >
-                            <span className="font-bold not-italic">Note:</span>{" "}
-                            {log.notes}
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
+                    )}
+                  </Fragment>
+                ))}
               </tbody>
             </table>
             <div className="border-t border-slate-300 pt-2 text-xs text-slate-500 text-center">
@@ -506,6 +508,7 @@ export default function TrackingPage() {
         )}
       </div>
 
+      {/* WEB HEADER */}
       <div className="flex items-center justify-between mb-6 print:hidden">
         <div className="flex items-center space-x-4">
           <button
@@ -517,7 +520,6 @@ export default function TrackingPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
             Track Progress
           </h1>
-          {/* WEB MASTERY BADGE */}
           {isMastered && (
             <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-wide rounded-full border border-emerald-200 animate-pulse">
               Goal Mastered!
@@ -554,7 +556,6 @@ export default function TrackingPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 block print:block">
-        {/* INPUT FORM (Same as before) */}
         <div className="lg:col-span-7 space-y-6 print:hidden">
           <form
             onSubmit={handleSubmit}
@@ -630,6 +631,7 @@ export default function TrackingPage() {
                 </div>
               </div>
             </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2">
                 Prompts Used (Select all that apply)
@@ -671,6 +673,7 @@ export default function TrackingPage() {
                 </span>
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2">
@@ -766,7 +769,6 @@ export default function TrackingPage() {
 
         <div className="lg:col-span-5 rounded-xl overflow-hidden flex flex-col h-[650px] shadow-sm border bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 print:w-full print:h-auto print:bg-white print:border-0 print:shadow-none print:block">
           <div className="print:hidden bg-slate-50 border-b border-slate-200 dark:bg-zinc-950 dark:border-zinc-800">
-            {/* FIX: Pass Target Score to Chart */}
             <GoalChart logs={logs} targetScore={goalInfo?.mastery_score} />
             <div className="p-4 border-t border-slate-200 dark:border-zinc-800">
               <h3 className="font-medium text-slate-900 dark:text-white">
@@ -775,6 +777,7 @@ export default function TrackingPage() {
             </div>
           </div>
           <div className="overflow-auto flex-1 p-0 print:overflow-visible">
+            {/* WEB TABLE with TESTER Column */}
             <table className="w-full text-left border-collapse print:hidden">
               <thead className="text-xs uppercase tracking-wider sticky top-0 bg-slate-50 text-slate-500 dark:bg-zinc-950 dark:text-zinc-500">
                 <tr>
@@ -789,6 +792,9 @@ export default function TrackingPage() {
                   </th>
                   <th className="p-3 border-b border-slate-200 dark:border-zinc-800">
                     Context
+                  </th>
+                  <th className="p-3 border-b border-slate-200 dark:border-zinc-800 text-center">
+                    Tester
                   </th>
                   <th className="p-3 border-b border-slate-200 dark:border-zinc-800 w-10"></th>
                 </tr>
@@ -896,6 +902,12 @@ export default function TrackingPage() {
                             </div>
                           )}
                         </div>
+                      </td>
+                      <td
+                        className="p-3 text-center text-slate-400 font-mono text-xs"
+                        title={log.tester_name}
+                      >
+                        {getInitials(log.tester_name)}
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-3">

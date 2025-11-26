@@ -16,7 +16,6 @@ import (
 	"goal-app/handlers"
 )
 
-// Define the Database Schema
 const schema = `
 CREATE TABLE IF NOT EXISTS students (
     id SERIAL PRIMARY KEY,
@@ -33,14 +32,26 @@ CREATE TABLE IF NOT EXISTS goals (
     iep_date DATE NOT NULL,
     description TEXT NOT NULL,
     active BOOLEAN DEFAULT TRUE,
-    mastery_score INTEGER DEFAULT 80,  -- NEW
-    mastery_count INTEGER DEFAULT 3,   -- NEW
+    mastery_score INTEGER DEFAULT 80,
+    mastery_count INTEGER DEFAULT 3,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'admin',
+    privacy_pin TEXT,
+    full_name TEXT,
+    school_name TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS tracking_logs (
     id SERIAL PRIMARY KEY,
     goal_id INTEGER REFERENCES goals(id),
+    user_id INTEGER REFERENCES users(id), -- NEW: Track who logged it
     log_date DATE NOT NULL,
     score TEXT,
     prompt_level TEXT,
@@ -50,14 +61,6 @@ CREATE TABLE IF NOT EXISTS tracking_logs (
     behavior TEXT,
     time_spent TEXT,
 	notes TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    role TEXT DEFAULT 'admin',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -103,12 +106,11 @@ func main() {
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{
-			"http://localhost:3000", "http://127.0.0.1:3000",
-			"http://localhost:3001", "http://127.0.0.1:3001",
-			"http://localhost:3002", "http://127.0.0.1:3002",
+			"http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://localhost:3004", "http://localhost:3005",
+			"http://127.0.0.1:3000", "http://127.0.0.1:3001", "http://127.0.0.1:3002", "http://127.0.0.1:3003", "http://127.0.0.1:3004", "http://127.0.0.1:3005",
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Cache-Control", "Pragma"},
 		ExposedHeaders:   []string{"Link", "Content-Disposition"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -135,15 +137,9 @@ func main() {
 				}
 				var count int
 				err = dbPool.QueryRow(context.Background(), "SELECT COUNT(*) FROM users").Scan(&count)
-				if err != nil || count == 0 {
-					http.SetCookie(w, &http.Cookie{
-						Name:     "auth_token",
-						Value:    "",
-						Expires:  time.Now().Add(-1 * time.Hour),
-						Path:     "/",
-						HttpOnly: true,
-					})
-					http.Error(w, "Session invalid", http.StatusUnauthorized)
+				if err == nil && count == 0 {
+					http.SetCookie(w, &http.Cookie{Name: "auth_token", Value: "", Expires: time.Now().Add(-1 * time.Hour), Path: "/", HttpOnly: true})
+					http.Error(w, "Session invalid - System reset", http.StatusUnauthorized)
 					return
 				}
 				next.ServeHTTP(w, r)
@@ -152,6 +148,13 @@ func main() {
 
 		r.Route("/api", func(r chi.Router) {
 			r.Get("/check-auth", repo.CheckAuth)
+			r.Get("/user/profile", repo.GetUserProfile)
+			r.Put("/user/profile", repo.UpdateUserProfile)
+			r.Get("/user/pin", repo.GetPinStatus)
+			r.Post("/user/pin", repo.SetUserPin)
+			r.Delete("/user/pin", repo.RemoveUserPin)
+			r.Post("/user/verify-pin", repo.VerifyUserPin)
+
 			r.Post("/invites", repo.CreateInvite)
 			r.Get("/users", repo.GetUsers)
 			r.Put("/users/{id}/role", repo.UpdateUserRole)
@@ -163,7 +166,6 @@ func main() {
 			r.Put("/students/{id}", repo.UpdateStudent)
 			r.Delete("/students/{id}", repo.DeleteStudent)
 
-			// Goals
 			r.Post("/goals", repo.CreateGoal)
 			r.Get("/goals", repo.GetGoals)
 			r.Get("/goals/{id}", repo.GetGoal)

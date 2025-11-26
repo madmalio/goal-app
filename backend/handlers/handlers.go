@@ -252,13 +252,20 @@ func (repo *Repository) ExportGoalLogs(w http.ResponseWriter, r *http.Request) {
 // --- LOGS ---
 
 func (repo *Repository) CreateLog(w http.ResponseWriter, r *http.Request) {
+    // 1. Get User ID from cookie
+    c, _ := r.Cookie("user_id")
+    var userID string
+    if c != nil { userID = c.Value }
+
 	var req models.CreateLogRequest
 	json.NewDecoder(r.Body).Decode(&req)
 	date, _ := time.Parse("2006-01-02", req.LogDate)
 
-	sql := `INSERT INTO tracking_logs (goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`
+    // 2. Save with user_id
+	sql := `INSERT INTO tracking_logs (goal_id, user_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`
 	var newID int
-	err := repo.DB.QueryRow(context.Background(), sql, req.GoalID, date, req.Score, req.PromptLevel, req.ManipulativesUsed, req.ManipulativesType, req.Compliance, req.Behavior, req.TimeSpent, req.Notes).Scan(&newID)
+    // Handle null user_id safely if needed, but for now assume logged in
+	err := repo.DB.QueryRow(context.Background(), sql, req.GoalID, userID, date, req.Score, req.PromptLevel, req.ManipulativesUsed, req.ManipulativesType, req.Compliance, req.Behavior, req.TimeSpent, req.Notes).Scan(&newID)
 	
 	if err != nil {
 		http.Error(w, "Error creating log: "+err.Error(), http.StatusInternalServerError)
@@ -269,7 +276,16 @@ func (repo *Repository) CreateLog(w http.ResponseWriter, r *http.Request) {
 
 func (repo *Repository) GetLogs(w http.ResponseWriter, r *http.Request) {
 	gid := r.URL.Query().Get("goal_id")
-	rows, err := repo.DB.Query(context.Background(), "SELECT id, goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, COALESCE(notes, '') FROM tracking_logs WHERE goal_id = $1 ORDER BY log_date DESC, created_at DESC", gid)
+    
+    // UPDATED SQL: JOIN with users to get name
+	sql := `
+        SELECT l.id, l.goal_id, l.user_id, COALESCE(u.full_name, u.email, 'Unknown'), l.log_date, l.score, l.prompt_level, l.manipulatives_used, l.manipulatives_type, l.compliance, l.behavior, l.time_spent, COALESCE(l.notes, '') 
+        FROM tracking_logs l
+        LEFT JOIN users u ON l.user_id = u.id
+        WHERE l.goal_id = $1 
+        ORDER BY l.log_date DESC, l.created_at DESC
+    `
+	rows, err := repo.DB.Query(context.Background(), sql, gid)
 	
 	if err != nil {
 		http.Error(w, "Error fetching logs", http.StatusInternalServerError)
@@ -280,7 +296,8 @@ func (repo *Repository) GetLogs(w http.ResponseWriter, r *http.Request) {
 	logs := []models.TrackingLog{}
 	for rows.Next() {
 		var l models.TrackingLog
-		rows.Scan(&l.ID, &l.GoalID, &l.LogDate, &l.Score, &l.PromptLevel, &l.ManipulativesUsed, &l.ManipulativesType, &l.Compliance, &l.Behavior, &l.TimeSpent, &l.Notes)
+        // Scan new TesterName field
+		rows.Scan(&l.ID, &l.GoalID, &l.UserID, &l.TesterName, &l.LogDate, &l.Score, &l.PromptLevel, &l.ManipulativesUsed, &l.ManipulativesType, &l.Compliance, &l.Behavior, &l.TimeSpent, &l.Notes)
 		logs = append(logs, l)
 	}
 	if logs == nil { logs = []models.TrackingLog{} }

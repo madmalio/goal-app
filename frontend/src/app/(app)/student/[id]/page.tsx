@@ -22,6 +22,66 @@ interface Student {
   active: boolean;
 }
 
+// --- GOAL BANK TEMPLATES ---
+const GOAL_BANK = [
+  {
+    label: "Reading - Fluency",
+    subject: "Reading",
+    description:
+      "Given a grade-level text, student will read aloud with 80% accuracy and proper intonation across 3 consecutive trials.",
+    mastery_score: 80,
+    mastery_count: 3,
+  },
+  {
+    label: "Reading - Comprehension",
+    subject: "Reading",
+    description:
+      "After reading a passage, student will answer WH- questions (who, what, where) with 80% accuracy.",
+    mastery_score: 80,
+    mastery_count: 3,
+  },
+  {
+    label: "Math - Single Digit Addition",
+    subject: "Math",
+    description:
+      "Student will solve single-digit addition problems with sums up to 20 with 85% accuracy using manipulatives if needed.",
+    mastery_score: 85,
+    mastery_count: 4,
+  },
+  {
+    label: "Math - Word Problems",
+    subject: "Math",
+    description:
+      "Given a one-step word problem read aloud, student will identify the correct operation and solve with 80% accuracy.",
+    mastery_score: 80,
+    mastery_count: 3,
+  },
+  {
+    label: "Behavior - Task Initiation",
+    subject: "Behavior",
+    description:
+      "Student will begin a requested task within 2 minutes of the initial prompt with no more than 1 verbal reminder.",
+    mastery_score: 90,
+    mastery_count: 5,
+  },
+  {
+    label: "Behavior - Peer Interaction",
+    subject: "Behavior",
+    description:
+      "Student will engage in reciprocal turn-taking with a peer for 5 minutes with 0 physical outbursts.",
+    mastery_score: 100,
+    mastery_count: 3,
+  },
+  {
+    label: "Life Skills - Personal Hygiene",
+    subject: "Life Skills",
+    description:
+      "Student will follow a visual schedule to complete hand-washing routine steps with 100% accuracy.",
+    mastery_score: 100,
+    mastery_count: 5,
+  },
+];
+
 // --- ICONS ---
 const CalendarIcon = () => (
   <svg
@@ -47,14 +107,17 @@ export default function StudentPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
 
+  // UI States
   const [isAddingGoal, setIsAddingGoal] = useState(false);
   const [isEditingStudent, setIsEditingStudent] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<number | null>(null);
 
+  // Modals
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [goalToDelete, setGoalToDelete] = useState<number | null>(null);
 
+  // Form States
   const [subject, setSubject] = useState("");
   const [iepDate, setIepDate] = useState("");
   const [description, setDescription] = useState("");
@@ -169,6 +232,17 @@ export default function StudentPage() {
       loadData();
     } catch (err) {
       alert("Failed to save goal");
+    }
+  };
+
+  // Auto-fill form when template selected
+  const handleTemplateSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const template = GOAL_BANK.find((g) => g.label === e.target.value);
+    if (template) {
+      setSubject(template.subject);
+      setDescription(template.description);
+      setMasteryScore(template.mastery_score);
+      setMasteryCount(template.mastery_count);
     }
   };
 
@@ -348,9 +422,26 @@ export default function StudentPage() {
 
       {isAddingGoal && (
         <div className="p-6 rounded-xl border shadow-sm bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 animate-fade-in-down">
-          <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
-            {editingGoalId ? "Edit Goal" : "Add IEP Goal"}
-          </h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+              {editingGoalId ? "Edit Goal" : "Add IEP Goal"}
+            </h3>
+            {/* NEW: GOAL BANK DROPDOWN */}
+            {!editingGoalId && (
+              <select
+                onChange={handleTemplateSelect}
+                className="text-sm border border-slate-300 rounded-md px-2 py-1 bg-slate-50 text-slate-600 cursor-pointer dark:bg-zinc-950 dark:border-zinc-700 dark:text-zinc-400"
+              >
+                <option value="">✨ Quick Fill from Goal Bank...</option>
+                {GOAL_BANK.map((g, i) => (
+                  <option key={i} value={g.label}>
+                    {g.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
           <form onSubmit={handleSaveGoal} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -491,6 +582,7 @@ export default function StudentPage() {
                 <span className="text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wide bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
                   {goal.subject}
                 </span>
+                {/* FORCE UTC FOR DISPLAY */}
                 <span className="text-xs text-slate-500 dark:text-zinc-500">
                   IEP Date:{" "}
                   {new Date(goal.iep_date).toLocaleDateString(undefined, {
@@ -501,7 +593,7 @@ export default function StudentPage() {
               <p className="text-lg leading-snug text-slate-800 dark:text-zinc-200">
                 {goal.description}
               </p>
-              {/* MASTERY BADGE PREVIEW (Optional) */}
+              {/* MASTERY INFO */}
               <div className="mt-3 text-xs text-slate-400 flex gap-4">
                 <span>
                   Target: <strong>{goal.mastery_score}%</strong>

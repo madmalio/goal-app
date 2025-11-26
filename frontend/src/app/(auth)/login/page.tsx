@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { fetchFromAPI } from "../../../utils/api";
 import { useToast } from "../../../context/ToastContext";
 
-// Icon Components
+// ... (Keep EyeIcon / EyeOffIcon components exactly the same) ...
 const EyeIcon = () => (
   <svg
-    className="w-5 h-5 text-slate-400 hover:text-slate-600 cursor-pointer"
+    className="w-5 h-5 text-slate-400"
     fill="none"
-    viewBox="0 0 24 24"
     stroke="currentColor"
+    viewBox="0 0 24 24"
   >
     <path
       strokeLinecap="round"
@@ -29,10 +29,10 @@ const EyeIcon = () => (
 );
 const EyeOffIcon = () => (
   <svg
-    className="w-5 h-5 text-slate-400 hover:text-slate-600 cursor-pointer"
+    className="w-5 h-5 text-slate-400"
     fill="none"
-    viewBox="0 0 24 24"
     stroke="currentColor"
+    viewBox="0 0 24 24"
   >
     <path
       strokeLinecap="round"
@@ -50,19 +50,36 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkStatus = async () => {
+    const init = async () => {
       try {
-        const res = await fetchFromAPI("/status");
-        if (res.is_setup === false) {
+        // 1. Check System Status (Setup vs Login)
+        const statusRes = await fetchFromAPI("/status", {
+          headers: { "Cache-Control": "no-cache" },
+        });
+        if (statusRes.is_setup === false) {
           router.replace("/setup");
+          return;
+        }
+
+        // 2. NEW: Check if already logged in (Safe Check)
+        // If this fails (401), it catches below and we show the Login Form.
+        // If it succeeds, we forward to Dashboard.
+        try {
+          await fetchFromAPI("/check-auth");
+          window.location.href = "/"; // Already logged in
+          return;
+        } catch (ignore) {
+          // Not logged in (or Ghost cookie invalid), show form
+          setIsLoading(false);
         }
       } catch (e) {
-        console.error("Status check failed", e);
+        setIsLoading(false);
       }
     };
-    checkStatus();
+    init();
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -81,9 +98,17 @@ export default function LoginPage() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950">
+        <div className="text-slate-500 animate-pulse">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4">
-      <div className="max-w-md w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg p-8">
+      <div className="max-w-md w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg p-8 animate-fade-in-up">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             GOAL MASTER
@@ -92,7 +117,6 @@ export default function LoginPage() {
             Sign in to access student records
           </p>
         </div>
-
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
@@ -101,6 +125,7 @@ export default function LoginPage() {
             <input
               type="email"
               required
+              placeholder="admin@school.edu"
               className="w-full px-3 py-2 border rounded-md bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -114,19 +139,19 @@ export default function LoginPage() {
               <input
                 type={showPassword ? "text" : "password"}
                 required
+                placeholder="Enter password"
                 className="w-full px-3 py-2 border rounded-md bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none pr-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
               <div
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
                 onClick={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </div>
             </div>
           </div>
-
           <button
             type="submit"
             className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-md transition-colors shadow-sm"

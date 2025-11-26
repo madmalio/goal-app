@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { fetchFromAPI } from "../../../utils/api";
 import { useToast } from "../../../context/ToastContext";
 
+// --- ICONS ---
 const EyeIcon = () => (
   <svg
     className="w-5 h-5 text-slate-400 hover:text-slate-600 cursor-pointer"
@@ -41,6 +42,36 @@ const EyeOffIcon = () => (
     />
   </svg>
 );
+const CheckIcon = () => (
+  <svg
+    className="w-4 h-4 text-emerald-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M5 13l4 4L19 7"
+    />
+  </svg>
+);
+const XIcon = () => (
+  <svg
+    className="w-4 h-4 text-red-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M6 18L18 6M6 6l12 12"
+    />
+  </svg>
+);
 
 function JoinContent() {
   const router = useRouter();
@@ -51,10 +82,12 @@ function JoinContent() {
   const [valid, setValid] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [fullName, setFullName] = useState(""); // NEW: Full Name State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  // Password Visibility State
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -65,20 +98,29 @@ function JoinContent() {
     }
     fetchFromAPI(`/invites/${token}`)
       .then(() => setValid(true))
-      .catch(() => setValid(false))
+      .catch((err) => {
+        console.error("Invite Error:", err);
+        setValid(false);
+      })
       .finally(() => setLoading(false));
   }, [token]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (password !== confirmPassword) {
       toast.error("Passwords do not match");
       return;
     }
+
     try {
       await fetchFromAPI(`/invites/${token}`, {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName, // NEW: Sending name
+        }),
       });
       toast.success("Account created successfully!");
       setTimeout(() => router.push("/login"), 1000);
@@ -87,14 +129,40 @@ function JoinContent() {
     }
   };
 
+  const isMatch = password && confirmPassword && password === confirmPassword;
+  const isMismatch =
+    password && confirmPassword && password !== confirmPassword;
+
   if (loading)
-    return <div className="p-8 text-center">Verifying invite...</div>;
-  if (!valid)
     return (
-      <div className="p-8 text-center text-red-500 font-bold">
-        Invalid Invite
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950">
+        <div className="text-slate-500 animate-pulse">Verifying invite...</div>
       </div>
     );
+
+  if (!valid) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4">
+        <div className="bg-white dark:bg-zinc-900 p-8 rounded-xl shadow border border-slate-200 dark:border-zinc-800 text-center max-w-md w-full">
+          <div className="mb-4 flex justify-center text-red-500">
+            <XIcon />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+            Invalid Invite
+          </h1>
+          <p className="text-slate-500 dark:text-zinc-400 text-sm">
+            This invite link is invalid, expired, or has already been used.
+          </p>
+          <button
+            onClick={() => router.push("/login")}
+            className="mt-6 w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 rounded-md transition-colors text-sm font-medium"
+          >
+            Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4">
@@ -105,7 +173,23 @@ function JoinContent() {
         <p className="text-center text-slate-500 dark:text-zinc-400 mb-8">
           Set up your Assistant account.
         </p>
+
         <form onSubmit={handleRegister} className="space-y-4">
+          {/* NEW: FULL NAME FIELD */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
+              Full Name
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Jane Doe"
+              className="w-full px-3 py-2 border rounded-md bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
               Your Email
@@ -113,11 +197,13 @@ function JoinContent() {
             <input
               type="email"
               required
-              className="w-full px-3 py-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+              placeholder="you@school.edu"
+              className="w-full px-3 py-2 border rounded-md bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
               Set Password
@@ -126,19 +212,20 @@ function JoinContent() {
               <input
                 type={showPassword ? "text" : "password"}
                 required
-                className="w-full px-3 py-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700 dark:text-white pr-10"
+                placeholder="Min 6 characters"
+                className="w-full px-3 py-2 border rounded-md bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-700 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none pr-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
               <div
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {" "}
-                {showPassword ? <EyeOffIcon /> : <EyeIcon />}{" "}
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </div>
             </div>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
               Confirm Password
@@ -147,22 +234,45 @@ function JoinContent() {
               <input
                 type={showConfirm ? "text" : "password"}
                 required
-                className="w-full px-3 py-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700 dark:text-white pr-10"
+                placeholder="Re-type password"
+                className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-zinc-950 dark:text-white focus:ring-2 outline-none pr-10 transition-colors
+                    ${
+                      isMismatch
+                        ? "border-red-300 focus:ring-red-200 focus:border-red-400"
+                        : "border-slate-300 dark:border-zinc-700 focus:ring-indigo-500"
+                    }
+                `}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
-              <div
-                className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                onClick={() => setShowConfirm(!showConfirm)}
-              >
-                {" "}
-                {showConfirm ? <EyeOffIcon /> : <EyeIcon />}{" "}
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center gap-2">
+                {isMatch && <CheckIcon />}
+                {isMismatch && <XIcon />}
+                <div
+                  onClick={() => setShowConfirm(!showConfirm)}
+                  className="cursor-pointer"
+                >
+                  {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
+                </div>
               </div>
             </div>
+            <div className="h-4 mt-1 text-xs transition-all">
+              {isMismatch && (
+                <span className="text-red-500 font-medium">
+                  Passwords do not match
+                </span>
+              )}
+              {isMatch && (
+                <span className="text-emerald-600 font-medium">
+                  Passwords match
+                </span>
+              )}
+            </div>
           </div>
+
           <button
             type="submit"
-            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-md"
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-md transition-colors shadow-sm"
           >
             Create Account
           </button>
