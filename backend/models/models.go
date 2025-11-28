@@ -6,39 +6,43 @@ type Student struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
 	StudentID string    `json:"student_id"`
+	IEPDate   time.Time `json:"iep_date"`
 	Active    bool      `json:"active"`
 }
 
 type Goal struct {
-	ID           int       `json:"id"`
-	StudentID    int       `json:"student_id"`
-	Subject      string    `json:"subject"`
-	IEPDate      time.Time `json:"iep_date"`
-	Description  string    `json:"description"`
-	Active       bool      `json:"active"`
-	MasteryScore int       `json:"mastery_score"`
-	MasteryCount int       `json:"mastery_count"`
+	ID            int       `json:"id"`
+	StudentID     int       `json:"student_id"`
+	Subject       string    `json:"subject"`
+	Description   string    `json:"description"`
+	Active        bool      `json:"active"`
+	MasteryEnabled bool      `json:"mastery_enabled"` // NEW
+	MasteryScore  int       `json:"mastery_score"`
+	MasteryCount  int       `json:"mastery_count"`
+	Frequency     string    `json:"frequency"`
 }
 
 type CreateStudentRequest struct {
 	Name      string `json:"name"`
 	StudentID string `json:"student_id"`
+	IEPDate   string `json:"iep_date"`
 }
 
 type CreateGoalRequest struct {
-	StudentID    int    `json:"student_id"`
-	Subject      string `json:"subject"`
-	IEPDate      string `json:"iep_date"`
-	Description  string `json:"description"`
-	MasteryScore int    `json:"mastery_score"`
-	MasteryCount int    `json:"mastery_count"`
+	StudentID      int    `json:"student_id"`
+	Subject        string `json:"subject"`
+	Description    string `json:"description"`
+	MasteryEnabled bool   `json:"mastery_enabled"` // NEW
+	MasteryScore   int    `json:"mastery_score"`
+	MasteryCount   int    `json:"mastery_count"`
+	Frequency      string `json:"frequency"`
 }
 
 type TrackingLog struct {
 	ID                int       `json:"id"`
 	GoalID            int       `json:"goal_id"`
 	UserID            int       `json:"user_id"`
-	TesterName        string    `json:"tester_name"` 
+	TesterName        string    `json:"tester_name"`
 	LogDate           time.Time `json:"log_date"`
 	Score             string    `json:"score"`
 	PromptLevel       string    `json:"prompt_level"`

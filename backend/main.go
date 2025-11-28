@@ -17,26 +17,6 @@ import (
 )
 
 const schema = `
-CREATE TABLE IF NOT EXISTS students (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    student_id TEXT UNIQUE NOT NULL,
-    active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS goals (
-    id SERIAL PRIMARY KEY,
-    student_id INTEGER REFERENCES students(id),
-    subject TEXT NOT NULL,
-    iep_date DATE NOT NULL,
-    description TEXT NOT NULL,
-    active BOOLEAN DEFAULT TRUE,
-    mastery_score INTEGER DEFAULT 80,
-    mastery_count INTEGER DEFAULT 3,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
@@ -48,10 +28,32 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS students (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    student_id TEXT UNIQUE NOT NULL,
+    iep_date DATE DEFAULT NOW(),
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS goals (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES students(id),
+    subject TEXT NOT NULL,
+    description TEXT NOT NULL,
+    active BOOLEAN DEFAULT TRUE,
+    mastery_enabled BOOLEAN DEFAULT FALSE, -- NEW
+    mastery_score INTEGER DEFAULT 80,
+    mastery_count INTEGER DEFAULT 3,
+    frequency TEXT DEFAULT 'Weekly',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS tracking_logs (
     id SERIAL PRIMARY KEY,
     goal_id INTEGER REFERENCES goals(id),
-    user_id INTEGER REFERENCES users(id), -- NEW: Track who logged it
+    user_id INTEGER REFERENCES users(id),
     log_date DATE NOT NULL,
     score TEXT,
     prompt_level TEXT,

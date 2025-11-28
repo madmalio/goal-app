@@ -6,6 +6,22 @@ import Link from "next/link";
 import { fetchFromAPI } from "../../utils/api";
 import { usePrivacy } from "../../context/PrivacyContext";
 
+const CalendarIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+    />
+  </svg>
+);
+
 export default function Dashboard() {
   const { isPrivacyMode } = usePrivacy();
   const [data, setData] = useState({
@@ -15,8 +31,13 @@ export default function Dashboard() {
     recent_logs: [] as any[],
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
+
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentId, setNewStudentId] = useState("");
+  // NEW: Date state
+  const [newStudentDate, setNewStudentDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -24,7 +45,6 @@ export default function Dashboard() {
   useEffect(() => {
     loadDashboard();
   }, []);
-
   useEffect(() => {
     if (searchParams.get("newStudent") === "true") {
       setIsModalOpen(true);
@@ -44,16 +64,19 @@ export default function Dashboard() {
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Send iep_date
       await fetchFromAPI("/students", {
         method: "POST",
         body: JSON.stringify({
           name: newStudentName,
           student_id: newStudentId,
+          iep_date: newStudentDate,
         }),
       });
       setIsModalOpen(false);
       setNewStudentName("");
       setNewStudentId("");
+      setNewStudentDate(new Date().toISOString().split("T")[0]);
       loadDashboard();
       window.location.reload();
     } catch (err) {
@@ -78,7 +101,7 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid (Same as before) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="p-6 rounded-xl border shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
           <div className="flex items-center gap-4">
@@ -101,7 +124,6 @@ export default function Dashboard() {
               <p className="text-sm font-medium text-slate-500 dark:text-zinc-400">
                 Total Students
               </p>
-              {/* PRIVACY BLUR APPLIED */}
               <h3
                 className={`text-2xl font-bold text-slate-900 dark:text-white ${
                   isPrivacyMode ? "privacy-blur" : ""
@@ -112,7 +134,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-
         <div className="p-6 rounded-xl border shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
@@ -140,7 +161,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-
         <div className="p-6 rounded-xl border shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-full bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
@@ -154,7 +174,7 @@ export default function Dashboard() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 00-2-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
                 />
               </svg>
             </div>
@@ -171,7 +191,6 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Activity Feed */}
         <div className="p-6 rounded-xl border shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
           <h3 className="text-lg font-bold mb-4 text-slate-900 dark:text-white">
             Recent Activity
@@ -187,7 +206,6 @@ export default function Dashboard() {
                   className="flex items-center justify-between p-3 rounded-lg border transition-colors bg-slate-50 border-slate-100 hover:bg-slate-100 hover:border-slate-200 dark:bg-zinc-950 dark:border-zinc-800 dark:hover:bg-zinc-800 dark:hover:border-zinc-700"
                 >
                   <div>
-                    {/* PRIVACY BLUR ON NAMES */}
                     <p
                       className={`font-semibold text-sm text-slate-900 dark:text-white ${
                         isPrivacyMode ? "privacy-blur" : ""
@@ -200,7 +218,6 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* PRIVACY BLUR ON SCORES */}
                     <span
                       className={`text-sm font-bold text-indigo-600 dark:text-indigo-400 ${
                         isPrivacyMode ? "privacy-blur" : ""
@@ -245,7 +262,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ADD STUDENT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl shadow-2xl border p-6 animate-fade-in-up bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
@@ -278,6 +294,27 @@ export default function Dashboard() {
                   onChange={(e) => setNewStudentId(e.target.value)}
                 />
               </div>
+
+              {/* NEW: DATE PICKER */}
+              <div>
+                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-zinc-300">
+                  IEP Date
+                </label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                    <CalendarIcon />
+                  </div>
+                  <input
+                    type="date"
+                    required
+                    className="w-full pl-10 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white [color-scheme:light] dark:[color-scheme:dark] cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
+                    value={newStudentDate}
+                    onChange={(e) => setNewStudentDate(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker()}
+                  />
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"

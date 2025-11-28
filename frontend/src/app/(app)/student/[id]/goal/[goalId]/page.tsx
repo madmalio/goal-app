@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, Fragment, useMemo } from "react";
+import { useState, useEffect, Fragment, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { fetchFromAPI } from "../../../../../../utils/api";
 import ConfirmModal from "../../../../../../components/ConfirmModal";
 import GoalChart from "../../../../../../components/GoalChart";
+import { useToast } from "../../../../../../context/ToastContext";
 
-// Helper to get initials "Mark Barela" -> "MB"
+// --- UI HELPERS ---
+
 const getInitials = (name: string) => {
   if (!name) return "-";
   return name
@@ -95,6 +97,7 @@ const ToggleBtn = ({ label, selected, onClick }: any) => (
   </button>
 );
 
+// --- ICONS ---
 const CalendarIcon = () => (
   <svg
     className="w-5 h-5"
@@ -127,17 +130,73 @@ const DownloadIcon = () => (
   </svg>
 );
 
+const MicIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+    />
+  </svg>
+);
+
+const StopIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+    />
+  </svg>
+);
+
+const MagicIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+    />
+  </svg>
+);
+
 export default function TrackingPage() {
   const params = useParams();
   const goalId = params.goalId;
   const router = useRouter();
+  const toast = useToast();
 
   const [logs, setLogs] = useState<any[]>([]);
   const [goalInfo, setGoalInfo] = useState<any>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [schoolName, setSchoolName] = useState(""); // NEW: For Print Header
+  const [schoolName, setSchoolName] = useState("");
   const [deleteModalId, setDeleteModalId] = useState<number | null>(null);
 
+  // Form State
   const [date, setDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [scoreNum, setScoreNum] = useState("");
   const [scoreDenom, setScoreDenom] = useState("");
@@ -150,6 +209,10 @@ export default function TrackingPage() {
   const [notes, setNotes] = useState("");
 
   const [isMastered, setIsMastered] = useState(false);
+
+  // Voice Notes State
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     // Fetch User Profile to get School Name
@@ -170,8 +233,16 @@ export default function TrackingPage() {
     }
   };
 
+  // CHECK MASTERY STATUS
   useEffect(() => {
     if (!logs.length || !goalInfo) return;
+
+    // If disabled, stop checking
+    if (!goalInfo.mastery_enabled) {
+      setIsMastered(false);
+      return;
+    }
+
     const target = goalInfo.mastery_score || 80;
     const requiredCount = goalInfo.mastery_count || 3;
     let streak = 0;
@@ -242,6 +313,97 @@ export default function TrackingPage() {
     });
   };
 
+  const toggleListening = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Your browser does not support voice recognition.");
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognition.onresult = (event: any) => {
+        const transcript =
+          event.results[event.results.length - 1][0].transcript;
+        setNotes((prev) => (prev + " " + transcript).trim());
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    }
+  };
+
+  // PERSONALIZED MAGIC NARRATIVE
+  const handleGenerateNarrative = () => {
+    const parts = [];
+    // Extract first name for personalization
+    const firstName = goalInfo?.student_name
+      ? goalInfo.student_name.split(" ")[0]
+      : "The student";
+
+    if (compliance && behavior) {
+      parts.push(
+        `${firstName} was ${compliance.toLowerCase()} compliant and demonstrated ${behavior.toLowerCase()} behavior.`
+      );
+    } else if (compliance) {
+      parts.push(`${firstName} was ${compliance.toLowerCase()} compliant.`);
+    } else if (behavior) {
+      parts.push(
+        `${firstName} demonstrated ${behavior.toLowerCase()} behavior.`
+      );
+    }
+
+    if (scoreNum) {
+      let perf = `They achieved a score of ${scoreNum}`;
+      if (scoreDenom) perf += `/${scoreDenom}`;
+
+      if (prompts.length > 0) {
+        const expand: Record<string, string> = {
+          HOH: "Hand-over-Hand",
+          VIP: "Visual Prompts",
+          VP: "Verbal Prompts",
+          IND: "Independence",
+        };
+        const pText = prompts.map((p) => expand[p] || p).join(" and ");
+        perf += ` with ${pText}`;
+      }
+      parts.push(perf + ".");
+    }
+
+    if (hasManipulatives) {
+      parts.push(
+        `Manipulatives${
+          manipulativesType ? ` (${manipulativesType})` : ""
+        } were utilized.`
+      );
+    }
+
+    if (timeSpent) {
+      parts.push(`Duration: ${timeSpent}.`);
+    }
+
+    if (parts.length === 0) {
+      toast.error("Fill in some data first.");
+      return;
+    }
+
+    const narrative = parts.join(" ");
+    setNotes((prev) => (prev ? prev + "\n" + narrative : narrative));
+    toast.success("Narrative generated!");
+  };
+
   const handleDeleteClick = (id: number) => setDeleteModalId(id);
 
   const confirmDelete = async () => {
@@ -250,8 +412,9 @@ export default function TrackingPage() {
       await fetchFromAPI(`/logs/${deleteModalId}`, { method: "DELETE" });
       loadData();
       if (editingId === deleteModalId) handleCancelEdit();
+      toast.success("Log deleted");
     } catch (err) {
-      alert("Failed to delete");
+      toast.error("Failed to delete");
     } finally {
       setDeleteModalId(null);
     }
@@ -307,8 +470,9 @@ export default function TrackingPage() {
       }
       resetForm();
       loadData();
+      toast.success("Log saved successfully");
     } catch (err) {
-      alert("Failed to save log");
+      toast.error("Failed to save log");
     }
   };
 
@@ -330,8 +494,9 @@ export default function TrackingPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      toast.success("Report downloaded");
     } catch (err) {
-      alert("Failed to export CSV");
+      toast.error("Failed to export CSV");
     }
   };
 
@@ -345,20 +510,19 @@ export default function TrackingPage() {
               Progress Report
             </h1>
           </div>
-          {/* HEADER NOW USES SCHOOL NAME */}
           <div className="text-right">
             <p className="text-sm font-bold">
               Generated: {new Date().toLocaleDateString()}
             </p>
             <p className="text-sm text-slate-600">
-              {schoolName || "Goal Master"}
+              Provider: {schoolName || "________________"}
             </p>
           </div>
         </div>
 
         {goalInfo && (
           <div className="mb-8">
-            <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-8 border border-slate-200 rounded-lg p-6">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 border border-slate-200 rounded-lg p-6">
               <div>
                 <span className="block text-xs uppercase font-bold text-slate-400 mb-1">
                   Student Name
@@ -373,12 +537,16 @@ export default function TrackingPage() {
                 </span>
                 <span className="block text-xl">{goalInfo.student_id_str}</span>
               </div>
+
               <div>
                 <span className="block text-xs uppercase font-bold text-slate-400 mb-1">
                   Goal / Subject
                 </span>
                 <span className="block text-xl font-bold text-indigo-900">
-                  {goalInfo.subject}
+                  {goalInfo.subject}{" "}
+                  <span className="text-sm font-normal text-slate-500 ml-2">
+                    ({goalInfo.frequency})
+                  </span>
                 </span>
               </div>
               <div>
@@ -391,6 +559,7 @@ export default function TrackingPage() {
                   })}
                 </span>
               </div>
+
               <div className="col-span-2 border-t border-slate-100 pt-4 mt-2">
                 <span className="block text-xs uppercase font-bold text-slate-400 mb-1">
                   Goal Description
@@ -401,7 +570,7 @@ export default function TrackingPage() {
               </div>
             </div>
 
-            {isMastered && (
+            {isMastered && goalInfo.mastery_enabled && (
               <div className="mb-8 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
                 <h3 className="text-emerald-700 font-bold uppercase tracking-wider text-sm">
                   Goal Mastered
@@ -430,56 +599,70 @@ export default function TrackingPage() {
               </div>
             </div>
 
-            {/* TABLE with TESTER Column */}
-            <table className="w-full text-sm mb-8">
-              <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-xs">
+            {/* COMPACT DATA TABLE */}
+            <table className="w-full text-xs mb-8 border-collapse">
+              <thead className="bg-slate-100 text-slate-600 font-bold uppercase">
                 <tr>
-                  <th className="p-3 text-left rounded-l-md">Date</th>
-                  <th className="p-3 text-left">Score</th>
-                  <th className="p-3 text-left">Prompts</th>
-                  <th className="p-3 text-left">Support</th>
-                  <th className="p-3 text-left">Compliance</th>
-                  <th className="p-3 text-left">Time</th>
-                  <th className="p-3 text-center rounded-r-md">Tester</th>
+                  <th className="p-2 text-left border-b border-slate-300">
+                    Date
+                  </th>
+                  <th className="p-2 text-left border-b border-slate-300">
+                    Score
+                  </th>
+                  <th className="p-2 text-left border-b border-slate-300">
+                    Prompts
+                  </th>
+                  <th className="p-2 text-left border-b border-slate-300">
+                    Support
+                  </th>
+                  <th className="p-2 text-left border-b border-slate-300">
+                    Compliance
+                  </th>
+                  <th className="p-2 text-left border-b border-slate-300">
+                    Time
+                  </th>
+                  <th className="p-2 text-center border-b border-slate-300">
+                    Initials
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-200">
                 {logs.map((log) => (
                   <Fragment key={log.id}>
+                    {/* REDUCED PADDING HERE (p-1) */}
                     <tr>
-                      <td className="p-3 whitespace-nowrap font-medium">
+                      <td className="p-1 whitespace-nowrap font-medium">
                         {new Date(log.log_date).toLocaleDateString(undefined, {
                           timeZone: "UTC",
                         })}
                       </td>
-                      <td className="p-3 font-bold">{log.score}</td>
-                      <td className="p-3 flex gap-1">
+                      <td className="p-1 font-bold">{log.score}</td>
+                      <td className="p-1 flex gap-1">
                         {getPromptBadges(log.prompt_level).map((b, i) => (
-                          <span key={i} className="text-xs border px-1 rounded">
+                          <span
+                            key={i}
+                            className="border px-1 rounded bg-white"
+                          >
                             {b.label}
                           </span>
                         ))}
                       </td>
-                      <td className="p-3">
+                      <td className="p-1">
                         {log.manipulatives_used ? `Yes` : "No"}
                       </td>
-                      <td className="p-3">
+                      <td className="p-1">
                         {log.compliance} / {log.behavior}
                       </td>
-                      <td className="p-3">{log.time_spent || "-"}</td>
-                      {/* TESTER INITIALS */}
-                      <td
-                        className="p-3 text-center text-slate-400 font-mono text-xs"
-                        title={log.tester_name}
-                      >
+                      <td className="p-1">{log.time_spent || "-"}</td>
+                      <td className="p-1 text-center font-mono">
                         {getInitials(log.tester_name)}
                       </td>
                     </tr>
                     {log.notes && (
-                      <tr className="bg-slate-50/50">
+                      <tr className="bg-slate-50">
                         <td
                           colSpan={7}
-                          className="p-3 italic text-xs text-slate-500 pl-8"
+                          className="p-1 italic text-slate-500 pl-4 border-b border-slate-100"
                         >
                           <span className="font-bold not-italic">Note:</span>{" "}
                           {log.notes}
@@ -490,6 +673,7 @@ export default function TrackingPage() {
                 ))}
               </tbody>
             </table>
+
             <div className="border-t border-slate-300 pt-2 text-xs text-slate-500 text-center">
               <span className="mx-2">
                 <strong>HOH</strong> = Hand over Hand
@@ -520,7 +704,7 @@ export default function TrackingPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
             Track Progress
           </h1>
-          {isMastered && (
+          {isMastered && goalInfo?.mastery_enabled && (
             <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-wide rounded-full border border-emerald-200 animate-pulse">
               Goal Mastered!
             </span>
@@ -547,7 +731,7 @@ export default function TrackingPage() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2-4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
               />
             </svg>{" "}
             Print Report
@@ -556,6 +740,7 @@ export default function TrackingPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 block print:block">
+        {/* INPUT FORM */}
         <div className="lg:col-span-7 space-y-6 print:hidden">
           <form
             onSubmit={handleSubmit}
@@ -735,13 +920,38 @@ export default function TrackingPage() {
               <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
                 Session Notes
               </label>
-              <textarea
-                rows={3}
-                placeholder="Anecdotal data..."
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
+              <div className="relative">
+                <textarea
+                  rows={3}
+                  placeholder="Anecdotal data..."
+                  className="w-full px-3 py-2 pb-12 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+                {/* MAGIC & MIC BUTTONS CONTAINER (RIGHT-2) */}
+                <div className="absolute bottom-2 right-2 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={handleGenerateNarrative}
+                    className="p-2 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all"
+                    title="Magic Narrative"
+                  >
+                    <MagicIcon />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    className={`p-2 rounded-full transition-all flex items-center justify-center ${
+                      isListening
+                        ? "bg-red-100 text-red-600 animate-pulse shadow-md ring-2 ring-red-200"
+                        : "text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                    }`}
+                    title={isListening ? "Stop Listening" : "Dictate Note"}
+                  >
+                    {isListening ? <StopIcon /> : <MicIcon />}
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="pt-4 flex gap-3">
               {editingId && (
@@ -767,9 +977,16 @@ export default function TrackingPage() {
           </form>
         </div>
 
+        {/* HISTORY TABLE */}
         <div className="lg:col-span-5 rounded-xl overflow-hidden flex flex-col h-[650px] shadow-sm border bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 print:w-full print:h-auto print:bg-white print:border-0 print:shadow-none print:block">
           <div className="print:hidden bg-slate-50 border-b border-slate-200 dark:bg-zinc-950 dark:border-zinc-800">
-            <GoalChart logs={logs} targetScore={goalInfo?.mastery_score} />
+            {/* PASS TARGET SCORE ONLY IF ENABLED */}
+            <GoalChart
+              logs={logs}
+              targetScore={
+                goalInfo?.mastery_enabled ? goalInfo.mastery_score : undefined
+              }
+            />
             <div className="p-4 border-t border-slate-200 dark:border-zinc-800">
               <h3 className="font-medium text-slate-900 dark:text-white">
                 History Log
@@ -777,7 +994,6 @@ export default function TrackingPage() {
             </div>
           </div>
           <div className="overflow-auto flex-1 p-0 print:overflow-visible">
-            {/* WEB TABLE with TESTER Column */}
             <table className="w-full text-left border-collapse print:hidden">
               <thead className="text-xs uppercase tracking-wider sticky top-0 bg-slate-50 text-slate-500 dark:bg-zinc-950 dark:text-zinc-500">
                 <tr>
