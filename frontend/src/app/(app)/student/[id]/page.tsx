@@ -2,31 +2,31 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link"; // Ensure Link is imported
-import { fetchFromAPI } from "../../../../utils/api";
+import { dbService, Student, Goal } from "../../../../utils/db";
+import { findSmartGoals } from "../../../../utils/goalLibrary";
 import ConfirmModal from "../../../../components/ConfirmModal";
 import { useToast } from "../../../../context/ToastContext";
+import SmartGoalGenerator from "../../../../components/SmartGoalGenerator";
+import Link from "next/link";
 
-interface Goal {
-  id: number;
-  subject: string;
-  description: string;
-  mastery_enabled: boolean;
-  mastery_score: number;
-  mastery_count: number;
-  frequency: string;
-  iep_date?: string;
-}
-
-interface Student {
-  id: number;
-  name: string;
-  student_id: string;
-  iep_date: string;
-  active: boolean;
-}
-
-// --- ICONS (Moved all to top for safety) ---
+// ... (ICONS BLOCK: CalendarIcon, MicIcon, StopIcon, MagicIcon, ChevronDownIcon, DownloadIcon) ...
+// [Keep existing icons here to save space in this snippet]
+// IMPORTANT: Ensure MagicIcon is the Wand version:
+const MagicIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M13 10V3L4 14h7v7l9-11h-7z"
+    />
+  </svg>
+);
 const CalendarIcon = () => (
   <svg
     className="w-5 h-5"
@@ -74,22 +74,7 @@ const StopIcon = () => (
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth={2}
-      d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
-    />
-  </svg>
-);
-const MagicIcon = () => (
-  <svg
-    className="w-5 h-5"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+      d="M9 10a1 1 0 011-1h4a1 1 0 01-1-1v-4z"
     />
   </svg>
 );
@@ -124,71 +109,11 @@ const DownloadIcon = () => (
   </svg>
 );
 
-// --- GOAL BANK ---
-const GOAL_BANK = [
-  {
-    label: "Reading - Fluency",
-    subject: "Reading",
-    description:
-      "Given a grade-level text, Student will read aloud with 80% accuracy and proper intonation across 3 consecutive trials.",
-    mastery_score: 80,
-    mastery_count: 3,
-  },
-  {
-    label: "Reading - Comprehension",
-    subject: "Reading",
-    description:
-      "After reading a passage, Student will answer WH- questions (who, what, where) with 80% accuracy.",
-    mastery_score: 80,
-    mastery_count: 3,
-  },
-  {
-    label: "Math - Single Digit Addition",
-    subject: "Math",
-    description:
-      "Student will solve single-digit addition problems with sums up to 20 with 85% accuracy using manipulatives if needed.",
-    mastery_score: 85,
-    mastery_count: 4,
-  },
-  {
-    label: "Math - Word Problems",
-    subject: "Math",
-    description:
-      "Given a one-step word problem read aloud, Student will identify the correct operation and solve with 80% accuracy.",
-    mastery_score: 80,
-    mastery_count: 3,
-  },
-  {
-    label: "Behavior - Task Initiation",
-    subject: "Behavior",
-    description:
-      "Student will begin a requested task within 2 minutes of the initial prompt with no more than 1 verbal reminder.",
-    mastery_score: 90,
-    mastery_count: 5,
-  },
-  {
-    label: "Behavior - Peer Interaction",
-    subject: "Behavior",
-    description:
-      "Student will engage in reciprocal turn-taking with a peer for 5 minutes with 0 physical outbursts.",
-    mastery_score: 100,
-    mastery_count: 3,
-  },
-  {
-    label: "Life Skills - Personal Hygiene",
-    subject: "Life Skills",
-    description:
-      "Student will follow a visual schedule to complete hand-washing routine steps with 100% accuracy.",
-    mastery_score: 100,
-    mastery_count: 5,
-  },
-];
-
 export default function StudentPage() {
   const params = useParams();
   const router = useRouter();
   const toast = useToast();
-  const studentId = params.id;
+  const studentId = Number(params.id);
 
   const [student, setStudent] = useState<Student | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -196,22 +121,25 @@ export default function StudentPage() {
   const [isAddingGoal, setIsAddingGoal] = useState(false);
   const [isEditingStudent, setIsEditingStudent] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<number | null>(null);
-
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [goalToDelete, setGoalToDelete] = useState<number | null>(null);
+  const [showSmartGenerator, setShowSmartGenerator] = useState(false);
 
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
-
   const [masteryEnabled, setMasteryEnabled] = useState(false);
   const [masteryScore, setMasteryScore] = useState(80);
   const [masteryCount, setMasteryCount] = useState(3);
-
   const [frequency, setFrequency] = useState("Weekly");
+
+  // NEW: Save to Library Checkbox
+  const [saveToLibrary, setSaveToLibrary] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editId, setEditId] = useState("");
+  const [editGrade, setEditGrade] = useState("K");
+  const [editClassType, setEditClassType] = useState("General Ed");
   const [editDate, setEditDate] = useState("");
 
   const [isListening, setIsListening] = useState(false);
@@ -223,75 +151,71 @@ export default function StudentPage() {
 
   const loadData = async () => {
     try {
-      const allStudents = await fetchFromAPI("/students");
-      const found = allStudents.find(
-        (s: Student) => s.id === Number(studentId)
-      );
+      const allStudents = await dbService.getStudents(true);
+      const found = allStudents.find((s) => s.id === studentId);
       if (found) {
         setStudent(found);
         setEditName(found.name);
         setEditId(found.student_id);
-        setEditDate(found.iep_date.split("T")[0]);
+        setEditGrade(found.grade || "K");
+        setEditClassType(found.class_type || "General Ed");
+        const d = found.iep_date
+          ? new Date(found.iep_date).toISOString().split("T")[0]
+          : "";
+        setEditDate(d);
+      } else {
+        toast.error("Student not found");
       }
-      const goalData = await fetchFromAPI(`/goals?student_id=${studentId}`);
+      const goalData = await dbService.getGoals(studentId);
       setGoals(goalData);
     } catch (error) {
-      console.error("Failed to load data", error);
+      console.error(error);
+      toast.error("Failed to load data");
     }
   };
 
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!student) return;
-    try {
-      await fetchFromAPI(`/students/${student.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          name: editName,
-          student_id: editId,
-          iep_date: editDate,
-          active: student.active,
-        }),
-      });
-      setIsEditingStudent(false);
-      loadData();
-      toast.success("Student updated");
-    } catch (err) {
-      toast.error("Failed to update student");
-    }
+    await dbService.updateStudent(
+      student.id,
+      editName,
+      editId,
+      editGrade,
+      editClassType,
+      editDate,
+      student.active
+    );
+    setIsEditingStudent(false);
+    loadData();
+    toast.success("Student updated");
   };
-
   const handleArchive = async () => {
     if (!student) return;
-    try {
-      await fetchFromAPI(`/students/${student.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          name: student.name,
-          student_id: student.student_id,
-          active: false,
-        }),
-      });
-      window.location.href = "/";
-    } catch (err) {
-      toast.error("Failed to archive student");
-    }
+    await dbService.updateStudent(
+      student.id,
+      student.name,
+      student.student_id,
+      student.grade,
+      student.class_type,
+      student.iep_date,
+      false
+    );
+    toast.success("Student archived");
+    router.push("/");
   };
   const handleDelete = async () => {
     if (!student) return;
-    try {
-      await fetchFromAPI(`/students/${student.id}`, { method: "DELETE" });
-      window.location.href = "/";
-    } catch (err) {
-      toast.error("Failed to delete student");
-    }
+    await dbService.deleteStudent(student.id);
+    toast.success("Student deleted");
+    router.push("/");
   };
 
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const payload = {
-        student_id: Number(studentId),
+        student_id: studentId,
         subject,
         description,
         mastery_enabled: masteryEnabled,
@@ -299,19 +223,23 @@ export default function StudentPage() {
         mastery_count: Number(masteryCount),
         frequency,
       };
-
       if (editingGoalId) {
-        await fetchFromAPI(`/goals/${editingGoalId}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
+        await dbService.updateGoal(editingGoalId, payload);
         toast.success("Goal updated");
       } else {
-        await fetchFromAPI("/goals", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        await dbService.createGoal(payload);
         toast.success("Goal created");
+
+        // NEW: Save to Custom Library Logic
+        if (saveToLibrary && description && subject) {
+          const firstName = student?.name.split(" ")[0] || "";
+          // Replace "Lucy" with "{{name}}"
+          const regex = new RegExp(firstName, "gi");
+          const template = description.replace(regex, "{{name}}");
+
+          await dbService.createCustomGoalTemplate(subject, template);
+          toast.success("Saved to your Goal Library!");
+        }
       }
 
       setIsAddingGoal(false);
@@ -322,43 +250,38 @@ export default function StudentPage() {
       setMasteryScore(80);
       setMasteryCount(3);
       setFrequency("Weekly");
+      setSaveToLibrary(false);
       loadData();
     } catch (err) {
       toast.error("Failed to save goal");
     }
   };
 
-  const handleTemplateSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const template = GOAL_BANK.find((g) => g.label === e.target.value);
-    if (template) {
-      setSubject(template.subject);
-      const firstName = student?.name.split(" ")[0] || "The student";
-      const personalizedDesc = template.description
-        .replace(/Student/g, firstName)
-        .replace(/student/g, firstName);
-      setDescription(personalizedDesc);
-      // No auto-enable mastery here, user decides
-      setMasteryScore(template.mastery_score);
-      setMasteryCount(template.mastery_count);
-      toast.success("Template applied!");
-    }
-  };
-
-  const handleGenerateGoal = () => {
+  // MAGIC WAND SHUFFLE
+  const handleGenerateGoal = async () => {
     if (!subject) {
       toast.error("Please enter a Subject first.");
       return;
     }
-    const firstName = student?.name.split(" ")[0] || "the student";
-    let template = `When presented with ${subject.toLowerCase()} tasks, ${firstName} will demonstrate skill mastery`;
-    if (masteryEnabled) {
-      template += ` with ${masteryScore}% accuracy across ${masteryCount} consecutive sessions,`;
+    if (!student) return;
+
+    // Fetch Custom Goals first
+    const customGoals = await dbService.getCustomGoalTemplates();
+    const suggestions = findSmartGoals(
+      subject,
+      student.class_type || "General Ed",
+      student.grade || "K",
+      student.name,
+      customGoals
+    );
+
+    if (suggestions.length > 0) {
+      const randomGoal = suggestions[0]; // Get top match
+      setDescription(randomGoal.text);
+      toast.success("Suggestion applied! Click 'Goal Wizard' for more.");
     } else {
-      template += `,`;
+      toast.info("No matches found. Try the Wizard!");
     }
-    template += ` as measured by teacher data collection.`;
-    setDescription(template);
-    toast.success("Goal drafted!");
   };
 
   const toggleListening = () => {
@@ -404,25 +327,18 @@ export default function StudentPage() {
 
   const handleDeleteGoal = async () => {
     if (!goalToDelete) return;
-    try {
-      await fetchFromAPI(`/goals/${goalToDelete}`, { method: "DELETE" });
-      setGoalToDelete(null);
-      loadData();
-      toast.success("Goal deleted");
-    } catch (err) {
-      toast.error("Failed to delete goal");
-    }
+    await dbService.deleteGoal(goalToDelete);
+    setGoalToDelete(null);
+    loadData();
+    toast.success("Goal deleted");
   };
 
   if (!student)
-    return (
-      <div className="text-slate-500 dark:text-zinc-500 p-8">
-        Loading student...
-      </div>
-    );
+    return <div className="text-slate-500 p-8">Loading student...</div>;
 
   return (
     <div className="space-y-6">
+      {/* HEADER */}
       <div className="flex justify-between items-start border-b pb-4 border-slate-200 dark:border-zinc-800">
         <div>
           <div className="flex items-center gap-3">
@@ -449,16 +365,15 @@ export default function StudentPage() {
             </button>
           </div>
           <p className="text-slate-500 dark:text-zinc-400 text-sm">
-            ID: {student.student_id} • IEP Date:{" "}
-            {new Date(student.iep_date).toLocaleDateString(undefined, {
-              timeZone: "UTC",
-            })}
+            ID: {student.student_id} • {student.grade} / {student.class_type} •
+            IEP Date: {new Date(student.iep_date).toLocaleDateString()}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowArchiveModal(true)}
             className="group p-2 rounded-md transition-colors border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:border-zinc-800 dark:text-zinc-500 dark:hover:bg-zinc-800"
+            title="Archive"
           >
             <svg
               className="w-5 h-5"
@@ -477,6 +392,7 @@ export default function StudentPage() {
           <button
             onClick={() => setShowDeleteModal(true)}
             className="group p-2 rounded-md transition-colors border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 dark:border-red-900/30 dark:text-red-500/70 dark:hover:bg-red-900/20"
+            title="Delete"
           >
             <svg
               className="w-5 h-5"
@@ -506,13 +422,7 @@ export default function StudentPage() {
                 : "bg-indigo-600 text-white hover:bg-indigo-700"
             }`}
           >
-            {isAddingGoal ? (
-              "Cancel"
-            ) : (
-              <>
-                <span>+</span> New Goal
-              </>
-            )}
+            {isAddingGoal ? "Cancel" : <span>+ New Goal</span>}
           </button>
         </div>
       </div>
@@ -525,7 +435,7 @@ export default function StudentPage() {
             </h2>
             <form onSubmit={handleUpdateStudent} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-zinc-300">
+                <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
                   Name
                 </label>
                 <input
@@ -533,23 +443,74 @@ export default function StudentPage() {
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                  className="w-full px-3 py-2 rounded-md border bg-slate-50 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
                 />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
+                    Student ID
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editId}
+                    onChange={(e) => setEditId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md border bg-slate-50 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
+                    Grade
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 rounded-md border bg-slate-50 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                    value={editGrade}
+                    onChange={(e) => setEditGrade(e.target.value)}
+                  >
+                    {[
+                      "PK",
+                      "K",
+                      "1",
+                      "2",
+                      "3",
+                      "4",
+                      "5",
+                      "6",
+                      "7",
+                      "8",
+                      "9",
+                      "10",
+                      "11",
+                      "12",
+                    ].map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-zinc-300">
-                  Student ID
+                <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
+                  Class Type
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={editId}
-                  onChange={(e) => setEditId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md border bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
-                />
+                <select
+                  className="w-full px-3 py-2 rounded-md border bg-slate-50 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                  value={editClassType}
+                  onChange={(e) => setEditClassType(e.target.value)}
+                >
+                  <option value="General Ed">General Education</option>
+                  <option value="Resource">Resource / Inclusion</option>
+                  <option value="SES1">SES1 (Social/Behavioral)</option>
+                  <option value="SES2">SES2 (Significant Support)</option>
+                  <option value="SES3">SES3 (Intensive Support)</option>
+                  <option value="Speech">Speech / SLP</option>
+                  <option value="OT">Occupational Therapy</option>
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-zinc-300">
+                <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
                   IEP Date
                 </label>
                 <div className="relative">
@@ -559,7 +520,7 @@ export default function StudentPage() {
                   <input
                     type="date"
                     required
-                    className="w-full pl-10 pr-3 py-2 border rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 border-slate-300 text-slate-900 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white [color-scheme:light] dark:[color-scheme:dark] cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden"
+                    className="w-full pl-10 pr-3 py-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
                     value={editDate}
                     onChange={(e) => setEditDate(e.target.value)}
                     onClick={(e) => e.currentTarget.showPicker()}
@@ -588,45 +549,37 @@ export default function StudentPage() {
 
       {isAddingGoal && (
         <div className="p-6 rounded-xl border shadow-sm bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 animate-fade-in-down">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-              {editingGoalId ? "Edit Goal" : "Add IEP Goal"}
-            </h3>
-            {!editingGoalId && (
-              <div className="relative">
-                <select
-                  onChange={handleTemplateSelect}
-                  className="appearance-none text-sm border border-slate-300 rounded-md pl-3 pr-8 py-1.5 bg-slate-50 text-slate-600 cursor-pointer dark:bg-zinc-950 dark:border-zinc-700 dark:text-zinc-400 focus:ring-2 focus:ring-indigo-500 outline-none"
-                >
-                  <option value="">✨ Quick Fill from Goal Bank...</option>
-                  {GOAL_BANK.map((g, i) => (
-                    <option key={i} value={g.label}>
-                      {g.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <ChevronDownIcon />
-                </div>
-              </div>
-            )}
-          </div>
-
+          <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">
+            {editingGoalId ? "Edit Goal" : "Add IEP Goal"}
+          </h3>
           <form onSubmit={handleSaveGoal} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
-                Subject
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Math"
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
+              <label className="block text-sm font-medium mb-1">Subject</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Math, Behavior"
+                  className="flex-1 px-3 py-2 border rounded-md bg-slate-50 dark:bg-zinc-950 dark:border-zinc-700"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!subject) {
+                      toast.error("Enter a subject first");
+                      return;
+                    }
+                    setShowSmartGenerator(true);
+                  }}
+                  className="px-3 py-2 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 flex items-center gap-1 font-medium"
+                >
+                  <MagicIcon />
+                  <span className="text-sm">Goal Wizard</span>
+                </button>
+              </div>
             </div>
-
             <div className="p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-md border border-slate-200 dark:border-zinc-800">
               <div className="flex items-center gap-2 mb-3">
                 <input
@@ -635,56 +588,40 @@ export default function StudentPage() {
                   onChange={(e) => setMasteryEnabled(e.target.checked)}
                   className="w-4 h-4 accent-indigo-600"
                 />
-                <label className="text-sm font-bold text-slate-700 dark:text-zinc-300">
+                <label className="text-sm font-bold">
                   Track Mastery Criteria?
                 </label>
               </div>
-
               {masteryEnabled && (
-                <div className="grid grid-cols-3 gap-4 animate-fade-in">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs uppercase font-bold text-slate-500 dark:text-zinc-400 mb-1">
-                      Target Score (%)
-                    </label>
+                    <label className="text-xs font-bold">Target %</label>
                     <input
                       type="number"
-                      min="1"
-                      max="100"
                       value={masteryScore}
                       onChange={(e) => setMasteryScore(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full p-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs uppercase font-bold text-slate-500 dark:text-zinc-400 mb-1">
-                      Consecutive Sessions
-                    </label>
+                    <label className="text-xs font-bold">Sessions</label>
                     <input
                       type="number"
-                      min="1"
-                      max="10"
                       value={masteryCount}
                       onChange={(e) => setMasteryCount(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full p-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700"
                     />
                   </div>
-                  <div className="relative">
-                    <label className="block text-xs uppercase font-bold text-slate-500 dark:text-zinc-400 mb-1">
-                      Frequency
-                    </label>
+                  <div>
+                    <label className="text-xs font-bold">Frequency</label>
                     <select
                       value={frequency}
                       onChange={(e) => setFrequency(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white cursor-pointer appearance-none"
+                      className="w-full p-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700"
                     >
-                      <option value="Daily">Daily</option>
-                      <option value="Weekly">Weekly</option>
-                      <option value="Bi-Weekly">Bi-Weekly</option>
-                      <option value="Monthly">Monthly</option>
+                      <option>Daily</option>
+                      <option>Weekly</option>
                     </select>
-                    <div className="absolute right-3 top-8 pointer-events-none text-slate-400">
-                      <ChevronDownIcon />
-                    </div>
                   </div>
                 </div>
               )}
@@ -709,50 +646,65 @@ export default function StudentPage() {
                 </div>
               )}
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-1">
-                Goal Description
+            <div className="relative">
+              <label className="block text-sm font-medium mb-1">
+                Description
               </label>
-              <div className="relative">
-                <textarea
-                  required
-                  rows={3}
-                  className="w-full px-3 py-2 pb-12 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-                <div className="absolute bottom-2 right-2 flex gap-1">
-                  <button
-                    type="button"
-                    onClick={handleGenerateGoal}
-                    className="p-2 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all"
-                    title="Auto-Generate Goal Text"
-                  >
-                    <MagicIcon />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    className={`p-2 rounded-full transition-all flex items-center justify-center ${
-                      isListening
-                        ? "bg-red-100 text-red-600 animate-pulse shadow-md ring-2 ring-red-200"
-                        : "text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-zinc-800"
-                    }`}
-                    title={isListening ? "Stop Listening" : "Dictate Goal"}
-                  >
-                    {isListening ? <StopIcon /> : <MicIcon />}
-                  </button>
-                </div>
+              <textarea
+                required
+                rows={3}
+                className="w-full p-3 border rounded-md dark:bg-zinc-950 dark:border-zinc-700"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              <div className="absolute bottom-2 right-2 flex gap-1">
+                <button
+                  type="button"
+                  onClick={handleGenerateGoal}
+                  className="p-2 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                  title="Shuffle Suggestion"
+                >
+                  <MagicIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  className={`p-2 rounded-full ${
+                    isListening
+                      ? "bg-red-100 text-red-600"
+                      : "text-slate-400 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                  }`}
+                >
+                  {isListening ? <StopIcon /> : <MicIcon />}
+                </button>
               </div>
             </div>
+
+            {/* NEW SAVE TO LIBRARY CHECKBOX */}
+            {!editingGoalId && (
+              <div className="flex items-center gap-2 pt-2 pb-4">
+                <input
+                  type="checkbox"
+                  id="saveLib"
+                  checked={saveToLibrary}
+                  onChange={(e) => setSaveToLibrary(e.target.checked)}
+                  className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                />
+                <label
+                  htmlFor="saveLib"
+                  className="text-sm text-slate-600 dark:text-zinc-400 cursor-pointer select-none"
+                >
+                  Save this goal to my Library for future students
+                </label>
+              </div>
+            )}
 
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-6 py-2 rounded-md font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+                className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
               >
-                {editingGoalId ? "Update Goal" : "Save Goal"}
+                Save Goal
               </button>
             </div>
           </form>
@@ -760,126 +712,133 @@ export default function StudentPage() {
       )}
 
       <div className="grid gap-4">
-        {goals.length === 0 ? (
-          <p className="text-slate-500 dark:text-zinc-600 italic">
-            No goals found. Add one above.
-          </p>
-        ) : (
-          goals.map((goal) => (
-            <div
-              key={goal.id}
-              className="p-6 rounded-xl border shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 relative group"
-            >
-              <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleEditGoalClick(goal)}
-                  className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-indigo-500 transition-colors"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setGoalToDelete(goal.id)}
-                  className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-red-500 transition-colors"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="flex justify-between items-start mb-2 pr-16">
-                <span className="text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wide bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
-                  {goal.subject}
-                </span>
-                <span className="text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wide bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700 ml-2">
-                  {goal.frequency}
-                </span>
-              </div>
-              <p className="text-lg leading-snug text-slate-800 dark:text-zinc-200 mt-2">
-                {goal.description}
-              </p>
-              {goal.mastery_enabled && (
-                <div className="mt-3 text-xs text-slate-400 flex gap-4">
-                  <span>
-                    Target: <strong>{goal.mastery_score}%</strong>
-                  </span>
-                  <span>
-                    Duration: <strong>{goal.mastery_count} sessions</strong>
-                  </span>
-                </div>
-              )}
-              <Link
-                href={`/student/${studentId}/goal/${goal.id}`}
-                className="mt-4 pt-4 border-t flex justify-end block border-slate-100 dark:border-zinc-800"
+        {goals.map((goal) => (
+          <div
+            key={goal.id}
+            className="p-6 rounded-xl border bg-white dark:bg-zinc-900 dark:border-zinc-800 relative group"
+          >
+            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => handleEditGoalClick(goal)}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-md text-slate-400 hover:text-indigo-500"
               >
-                <span className="text-sm font-medium flex items-center transition-colors text-slate-500 group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-400">
-                  Track Progress{" "}
-                  <svg
-                    className="w-4 h-4 ml-1"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 8l4 4m0 0l-4 4m4-4H3"
-                    />
-                  </svg>
-                </span>
-              </Link>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={() => setGoalToDelete(goal.id)}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-md text-slate-400 hover:text-red-500"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+              </button>
             </div>
-          ))
-        )}
+            <div className="flex justify-between items-start mb-2 pr-16">
+              <span className="text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wide bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                {goal.subject}
+              </span>
+              <span className="text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wide bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700 ml-2">
+                {goal.frequency}
+              </span>
+            </div>
+            <p className="text-lg leading-snug text-slate-800 dark:text-zinc-200 mt-2">
+              {goal.description}
+            </p>
+            {goal.mastery_enabled && (
+              <div className="mt-3 text-xs text-slate-400 flex gap-4">
+                <span>
+                  Target: <strong>{goal.mastery_score}%</strong>
+                </span>
+                <span>
+                  Duration: <strong>{goal.mastery_count} sessions</strong>
+                </span>
+              </div>
+            )}
+            <Link
+              href={`/student/${studentId}/goal/${goal.id}`}
+              className="mt-4 pt-4 border-t flex justify-end block border-slate-100 dark:border-zinc-800"
+            >
+              <span className="text-sm font-medium flex items-center transition-colors text-slate-500 group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-400">
+                Track Progress{" "}
+                <svg
+                  className="w-4 h-4 ml-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 8l4 4m0 0l-4 4m4-4H3"
+                  />
+                </svg>
+              </span>
+            </Link>
+          </div>
+        ))}
       </div>
 
       <ConfirmModal
         isOpen={showArchiveModal}
         onClose={() => setShowArchiveModal(false)}
         onConfirm={handleArchive}
-        title="Archive Student?"
-        message={`Are you sure you want to archive ${student.name}?`}
+        title="Archive?"
+        message="Archive this student?"
         confirmText="Archive"
       />
       <ConfirmModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDelete}
-        title="Permanently Delete?"
-        message="WARNING: This will delete the student and ALL their data."
-        confirmText="Delete Forever"
-        isDestructive={true}
+        title="Delete?"
+        message="Delete permanently?"
+        confirmText="Delete"
+        isDestructive
       />
       <ConfirmModal
         isOpen={!!goalToDelete}
         onClose={() => setGoalToDelete(null)}
         onConfirm={handleDeleteGoal}
         title="Delete Goal?"
-        message="This will delete this goal and ALL its logs."
-        confirmText="Delete Goal"
-        isDestructive={true}
+        message="Delete goal and logs?"
+        confirmText="Delete"
+        isDestructive
+      />
+
+      <SmartGoalGenerator
+        isOpen={showSmartGenerator}
+        onClose={() => setShowSmartGenerator(false)}
+        subject={subject}
+        studentName={student.name}
+        classType={student.class_type}
+        grade={student.grade}
+        onSelectGoals={(selectedGoals) => {
+          const text = selectedGoals.join("\n\n");
+          setDescription((prev) => (prev ? prev + "\n\n" + text : text));
+        }}
       />
     </div>
   );

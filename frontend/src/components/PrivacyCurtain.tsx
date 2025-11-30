@@ -1,48 +1,39 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { usePathname } from "next/navigation"; // <--- NEW IMPORT
+import { usePathname } from "next/navigation";
 import { usePrivacy } from "../context/PrivacyContext";
-import { fetchFromAPI } from "../utils/api";
+import { dbService } from "../utils/db"; // UPDATED import
 
 export default function PrivacyCurtain() {
-  const pathname = usePathname(); // <--- GET CURRENT PATH
+  const pathname = usePathname();
   const { isLocked, unlockApp } = usePrivacy();
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 1. IMMEDIATE EXIT: Do not show curtain on public pages
-  const isPublicPage =
-    pathname === "/login" ||
-    pathname === "/setup" ||
-    pathname?.startsWith("/join");
-
   // Focus management
   useEffect(() => {
-    if (isLocked && !isPublicPage && inputRef.current) {
+    if (isLocked && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isLocked, isPublicPage]);
+  }, [isLocked]);
 
-  // 2. Return null if not locked OR if on a public page
-  if (!isLocked || isPublicPage) return null;
+  if (!isLocked) return null;
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
     try {
-      const res = await fetchFromAPI("/user/verify-pin", {
-        method: "POST",
-        body: JSON.stringify({ pin }),
-      });
+      // UPDATED: Check local DB
+      const isValid = await dbService.verifyPin(pin);
 
-      if (res && res.valid === true) {
+      if (isValid) {
         setPin("");
         setError(false);
         unlockApp();
       } else {
-        throw new Error("Invalid PIN response");
+        throw new Error("Invalid PIN");
       }
     } catch (err) {
       setError(true);
@@ -65,7 +56,8 @@ export default function PrivacyCurtain() {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 
+              2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
             />
           </svg>
         </div>

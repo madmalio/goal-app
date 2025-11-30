@@ -7,7 +7,7 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { fetchFromAPI } from "../utils/api";
+import { dbService } from "../utils/db"; // UPDATED import
 
 interface PrivacyContextType {
   isLocked: boolean;
@@ -21,7 +21,6 @@ interface PrivacyContextType {
 const PrivacyContext = createContext<PrivacyContextType | undefined>(undefined);
 
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
-  // FIX: Default false to prevent flash on login
   const [isLocked, setIsLocked] = useState(false);
   const [hasPin, setHasPin] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -34,11 +33,14 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
     refreshPinStatus();
   }, []);
 
+  // UPDATED: Check local DB instead of API
   const refreshPinStatus = async () => {
     try {
-      const res = await fetchFromAPI("/user/pin");
-      setHasPin(res.has_pin);
+      const settings = await dbService.getSettings();
+      // If privacy_pin is strictly not null/empty
+      setHasPin(!!settings && !!settings.privacy_pin);
     } catch (err) {
+      console.error("Failed to check PIN status", err);
       setHasPin(false);
     }
   };
@@ -52,6 +54,7 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
     setIsLocked(true);
     localStorage.setItem("is_app_locked", "true");
   };
+
   const unlockApp = () => {
     setIsLocked(false);
     localStorage.setItem("is_app_locked", "false");

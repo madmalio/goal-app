@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -10,7 +10,21 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Goal Master",
-  description: "IEP Goal Tracking Application",
+  description: "Offline IEP Goal Tracking",
+  manifest: "/manifest.json", // LINK THE MANIFEST
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Goal Master",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#4f46e5",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false, // Prevents zooming like a website
 };
 
 export default function RootLayout({
