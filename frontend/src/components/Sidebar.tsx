@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { dbService, Student } from "../utils/db";
 import { usePrivacy } from "../context/PrivacyContext";
 import { useToast } from "../context/ToastContext";
-import BackupStatus from "./BackupStatus";
 
 // --- ICONS ---
 
@@ -216,9 +215,6 @@ export default function Sidebar() {
 
         {/* FOOTER AREA */}
         <div className="space-y-2">
-          {/* Backup Status Widget */}
-          <BackupStatus />
-
           <div className="px-2 pb-2 space-y-1 pt-4 border-t border-slate-100 dark:border-zinc-800">
             <button
               onClick={handleLockClick}

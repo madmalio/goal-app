@@ -3,6 +3,7 @@
 import { ThemeProvider } from "next-themes";
 import { useState, useEffect } from "react";
 import { initDB } from "../utils/db";
+import { BackupProvider } from "../context/BackupContext";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isDbReady, setIsDbReady] = useState(false);
@@ -33,7 +34,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      {children}
+      <BackupProvider>
+        {" "}
+        {/* <--- Wrap Children */}
+        {children}
+      </BackupProvider>
     </ThemeProvider>
   );
 }

@@ -567,6 +567,9 @@ export const dbService = {
       DELETE FROM goals;
       DELETE FROM students;
       DELETE FROM custom_goals;
+      DELETE FROM settings;
     `);
+    // Re-initialize settings so the app doesn't crash
+    await db.exec("INSERT INTO settings (id) VALUES (1)");
   },
 };
