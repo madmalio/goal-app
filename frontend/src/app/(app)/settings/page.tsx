@@ -6,6 +6,8 @@ import SecuritySection from "../../../components/settings/SecuritySection";
 import ReportDefaultsSection from "../../../components/settings/ReportDefaultsSection";
 import DataManagementSection from "../../../components/settings/DataManagementSection";
 import DangerZoneSection from "../../../components/settings/DangerZoneSection";
+import AboutSection from "../../../components/settings/AboutSection";
+import LegalSection from "../../../components/settings/LegalSection";
 
 export default function SettingsPage() {
   // We use this to prevent hydration mismatch errors (standard Next.js pattern)
@@ -24,7 +26,9 @@ export default function SettingsPage() {
       <SecuritySection />
       <ReportDefaultsSection />
       <DataManagementSection />
+      <AboutSection />
       <DangerZoneSection />
+      <LegalSection />
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { Fragment } from "react";
 import { TrackingLog } from "../utils/db";
 
-// --- HELPERS (Moved here for the report) ---
+// --- HELPERS ---
 const getPromptBadges = (levelString: string) => {
   if (!levelString) return [{ label: "-", color: "text-slate-400" }];
   const levels = levelString.split(",").map((s) => s.trim());
@@ -85,12 +85,16 @@ export default function PrintLayout({
               {goalInfo.student_name}
             </span>
           </div>
-          <div>
-            <span className="block uppercase font-bold text-slate-500 mb-0.5 text-[10px]">
-              Student ID
-            </span>
-            <span className="block text-base">{goalInfo.student_id_str}</span>
-          </div>
+
+          {goalInfo.student_id_str && (
+            <div>
+              <span className="block uppercase font-bold text-slate-500 mb-0.5 text-[10px]">
+                Student ID
+              </span>
+              <span className="block text-base">{goalInfo.student_id_str}</span>
+            </div>
+          )}
+
           <div>
             <span className="block uppercase font-bold text-slate-500 mb-0.5 text-[10px]">
               Goal / Subject
@@ -102,16 +106,21 @@ export default function PrintLayout({
               </span>
             </span>
           </div>
-          <div>
-            <span className="block uppercase font-bold text-slate-500 mb-0.5 text-[10px]">
-              IEP Date
-            </span>
-            <span className="block text-base">
-              {new Date(goalInfo.iep_date).toLocaleDateString(undefined, {
-                timeZone: "UTC",
-              })}
-            </span>
-          </div>
+
+          {/* FIXED: Conditional IEP Date */}
+          {goalInfo.iep_date && (
+            <div>
+              <span className="block uppercase font-bold text-slate-500 mb-0.5 text-[10px]">
+                IEP Date
+              </span>
+              <span className="block text-base">
+                {new Date(goalInfo.iep_date).toLocaleDateString(undefined, {
+                  timeZone: "UTC",
+                })}
+              </span>
+            </div>
+          )}
+
           <div className="col-span-2 border-t border-slate-100 pt-3 mt-1">
             <span className="block uppercase font-bold text-slate-500 mb-0.5 text-[10px]">
               Goal Description
@@ -184,7 +193,6 @@ export default function PrintLayout({
                 .filter(Boolean)
                 .join(" / ");
 
-              // Narrative Generator for Print
               const firstName = goalInfo?.student_name
                 ? goalInfo.student_name.split(" ")[0]
                 : "Student";
@@ -266,7 +274,6 @@ export default function PrintLayout({
           </tbody>
         </table>
 
-        {/* Legend */}
         <div className="text-[11px] text-slate-600 mt-3 text-center">
           <span className="font-bold">HOH</span> = Hand over Hand&nbsp;&nbsp;
           <span className="font-bold">VIP</span> = Visual Prompt&nbsp;&nbsp;

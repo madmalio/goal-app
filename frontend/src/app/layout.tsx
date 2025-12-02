@@ -11,7 +11,12 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Goal Master",
   description: "Offline IEP Goal Tracking",
-  manifest: "/manifest.json", // LINK THE MANIFEST
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png", // Used for iPhone Home Screen
+    shortcut: "/icon-192.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

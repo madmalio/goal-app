@@ -4,18 +4,21 @@ import { useState, useEffect } from "react";
 import { dbService } from "../utils/db";
 import { backupService } from "../utils/backupService";
 import { useBackup } from "../context/BackupContext";
+import { usePrivacy } from "../context/PrivacyContext"; // <--- Import Privacy Context
 import { useToast } from "../context/ToastContext";
 
 export default function WelcomeModal() {
   const [isOpen, setIsOpen] = useState(false);
-  const [step, setStep] = useState(1); // 1 = Profile, 2 = Backup
+  const [step, setStep] = useState(1); // 1 = Profile, 2 = Backup, 3 = PIN
 
   // Form State
   const [teacherName, setTeacherName] = useState("");
   const [schoolName, setSchoolName] = useState("");
+  const [pin, setPin] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
 
   const { refreshBackupStatus } = useBackup();
+  const { refreshPinStatus } = usePrivacy(); //To update the lock icon state
   const toast = useToast();
 
   useEffect(() => {
@@ -25,7 +28,6 @@ export default function WelcomeModal() {
   const checkIfNewUser = async () => {
     try {
       const settings = await dbService.getSettings();
-      // If no teacher name is set, assume it's a new install
       if (!settings.teacher_name) {
         setIsOpen(true);
       }
@@ -34,38 +36,28 @@ export default function WelcomeModal() {
     }
   };
 
+  // --- STEP 1: PROFILE ---
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await dbService.updateProfile(teacherName, schoolName);
-      setStep(2); // Move to Backup Step
+      setStep(2);
     } catch (e) {
       toast.error("Failed to save profile");
     }
   };
 
+  // --- STEP 2: BACKUP ---
   const handleSetupBackup = async () => {
     setIsConnecting(true);
     try {
       if (backupService.isSupported()) {
-        // --- MODERN AUTO-SAVE PATH ---
-
-        // 1. Prime the user so they expect the window
         toast.info("Please select a location to save your backup file...");
-
-        // 2. FORCE THE POPUP by calling initializeHandle directly
         await backupService.initializeHandle();
-
-        // 3. Perform the first save to verify
         await backupService.performBackup();
-
-        await refreshBackupStatus(); // Syncs the rest of the app!
+        await refreshBackupStatus();
         toast.success("Auto-Backup Enabled!");
-        setIsOpen(false);
       } else {
-        // --- FALLBACK PATH (Safari/Firefox/Mobile) ---
-        // Manually download the file so they have a copy
-
         const jsonString = await dbService.exportBackup();
         const blob = new Blob([jsonString], { type: "application/json" });
         const url = window.URL.createObjectURL(blob);
@@ -78,25 +70,40 @@ export default function WelcomeModal() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-
-        // Mark as backed up in context
         await refreshBackupStatus();
-
-        toast.success(
-          "Backup downloaded (Auto-save not supported on this browser)"
-        );
-        setIsOpen(false);
+        toast.success("Backup downloaded (Auto-save not supported)");
       }
+      setStep(3); // Move to PIN
     } catch (err) {
-      console.error(err);
-      // Don't show confusing errors if they just cancelled the popup
+      // If cancelled, just stay on step 2 or let them skip manually
     } finally {
       setIsConnecting(false);
     }
   };
 
   const handleSkipBackup = () => {
-    setIsOpen(false);
+    setStep(3); // Move to PIN
+  };
+
+  // --- STEP 3: PIN ---
+  const handleSetPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin.length !== 4) {
+      toast.error("PIN must be 4 digits");
+      return;
+    }
+    try {
+      await dbService.setPin(pin);
+      await refreshPinStatus();
+      toast.success("Security PIN Set!");
+      setIsOpen(false); // FINISHED!
+    } catch (err) {
+      toast.error("Failed to set PIN");
+    }
+  };
+
+  const handleSkipPin = () => {
+    setIsOpen(false); // FINISHED!
     toast.success("Welcome aboard!");
   };
 
@@ -184,7 +191,7 @@ export default function WelcomeModal() {
                 <br />
                 <br />
                 We recommend enabling Auto-Save to sync directly to your hard
-                drive. A browser window will pop up to ask for a save location.
+                drive.
               </p>
             </div>
 
@@ -200,9 +207,72 @@ export default function WelcomeModal() {
                 onClick={handleSkipBackup}
                 className="text-slate-400 text-sm hover:text-slate-600 dark:hover:text-zinc-300 underline"
               >
-                I'll do this later in Settings
+                Skip for now
               </button>
             </div>
+          </div>
+        )}
+
+        {/* STEP 3: SECURITY PIN (NEW) */}
+        {step === 3 && (
+          <div className="space-y-6 animate-fade-in text-center">
+            <div className="mx-auto w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+              <svg
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                Set a Security PIN
+              </h2>
+              <p className="text-slate-500 dark:text-zinc-400 mt-2 text-sm">
+                Prevent prying eyes. Set a 4-digit code to quickly lock the
+                screen when you step away from your desk.
+              </p>
+            </div>
+
+            <form onSubmit={handleSetPin} className="space-y-4">
+              <div className="flex justify-center">
+                <input
+                  autoFocus
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  className="w-48 text-center text-3xl tracking-[0.5em] py-3 rounded-lg border bg-slate-50 dark:bg-zinc-950 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white font-bold"
+                  placeholder="••••"
+                />
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={pin.length !== 4}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg shadow-emerald-500/20 transition-all"
+                >
+                  Set PIN & Finish
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSkipPin}
+                  className="text-slate-400 text-sm hover:text-slate-600 dark:hover:text-zinc-300 underline"
+                >
+                  Skip Security
+                </button>
+              </div>
+            </form>
           </div>
         )}
       </div>

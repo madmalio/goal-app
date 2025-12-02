@@ -7,9 +7,10 @@ import ConfirmModal from "@/components/ConfirmModal";
 import TrackingForm from "@/components/TrackingForm";
 import LogHistoryTable from "@/components/LogHistoryTable";
 import PrintLayout from "@/components/PrintLayout";
+import DateRangeFilter from "@/components/DateRangeFilter";
 import { useToast } from "@/context/ToastContext";
 
-// Keep simple icons needed for Header/Export
+// --- ICONS ---
 const DownloadIcon = () => (
   <svg
     className="w-4 h-4"
@@ -47,8 +48,11 @@ export default function TrackingPage() {
   const router = useRouter();
   const toast = useToast();
 
+  // Data State
   const [logs, setLogs] = useState<TrackingLog[]>([]);
   const [goalInfo, setGoalInfo] = useState<any>(null);
+
+  // UI State
   const [editingLog, setEditingLog] = useState<TrackingLog | null>(null);
   const [reportSettings, setReportSettings] = useState({
     school: "",
@@ -57,6 +61,11 @@ export default function TrackingPage() {
   const [deleteModalId, setDeleteModalId] = useState<number | null>(null);
   const [isMastered, setIsMastered] = useState(false);
 
+  // Filter State
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  // 1. Load Initial Data
   useEffect(() => {
     dbService
       .getSettings()
@@ -78,7 +87,32 @@ export default function TrackingPage() {
     }
   };
 
-  // Mastery Calculation Logic [cite: 409]
+  // 2. Filter Logs based on Date Range
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      if (!startDate && !endDate) return true;
+
+      const logDate = new Date(log.log_date);
+      // Normalize time to midnight for accurate comparison
+      logDate.setHours(0, 0, 0, 0);
+
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        if (logDate < start) return false;
+      }
+
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // Include the entire end day
+        if (logDate > end) return false;
+      }
+
+      return true;
+    });
+  }, [logs, startDate, endDate]);
+
+  // 3. Calculate Mastery (Based on ALL logs logic to determine current status)
   useEffect(() => {
     if (!logs.length || !goalInfo) return;
     if (!goalInfo.mastery_enabled) {
@@ -88,6 +122,8 @@ export default function TrackingPage() {
     const target = goalInfo.mastery_score || 80;
     const requiredCount = goalInfo.mastery_count || 3;
     let streak = 0;
+
+    // Check most recent logs (logs are already sorted DESC from DB)
     for (const log of logs) {
       let percent = 0;
       if (log.score.includes("/")) {
@@ -102,12 +138,13 @@ export default function TrackingPage() {
     setIsMastered(streak >= requiredCount);
   }, [logs, goalInfo]);
 
-  // Statistics Calculation [cite: 411]
+  // 4. Calculate Stats (Based on FILTERED logs for reporting)
   const stats = useMemo(() => {
-    if (!logs.length) return { average: "N/A", count: 0 };
+    if (!filteredLogs.length) return { average: "N/A", count: 0 };
     let totalPercent = 0;
     let count = 0;
-    logs.forEach((l) => {
+
+    filteredLogs.forEach((l) => {
       if (l.score && l.score.includes("/")) {
         const [num, den] = l.score.split("/").map(Number);
         if (!isNaN(num) && !isNaN(den) && den > 0) {
@@ -122,14 +159,15 @@ export default function TrackingPage() {
         }
       }
     });
+
     return {
-      count: logs.length,
+      count: filteredLogs.length,
       average:
         count > 0 ? Math.round((totalPercent / count) * 100) + "%" : "N/A",
     };
-  }, [logs]);
+  }, [filteredLogs]);
 
-  // Handlers
+  // 5. Handlers
   const handleSubmitLog = async (data: Partial<TrackingLog>) => {
     try {
       if (editingLog) {
@@ -142,6 +180,24 @@ export default function TrackingPage() {
       toast.success("Log saved successfully");
     } catch {
       toast.error("Failed to save log");
+    }
+  };
+
+  // --- NEW: Handle Smart Preference Update ---
+  const handleUpdateGoalPreference = async (
+    newType: "fraction" | "percentage"
+  ) => {
+    if (goalInfo?.tracking_type !== newType) {
+      try {
+        await dbService.updateGoal(goalId, {
+          ...goalInfo,
+          tracking_type: newType,
+        });
+        // We reload data to ensure the UI has the latest "default" for next time
+        loadData();
+      } catch (e) {
+        console.error("Failed to update preference", e);
+      }
     }
   };
 
@@ -159,10 +215,9 @@ export default function TrackingPage() {
     }
   };
 
-  // Export CSV Logic [cite: 450]
   const handleExportCSV = () => {
-    if (!logs.length) {
-      toast.error("No logs to export");
+    if (!filteredLogs.length) {
+      toast.error("No logs to export in this date range");
       return;
     }
     const headers = [
@@ -176,7 +231,7 @@ export default function TrackingPage() {
       "Time Spent",
       "Notes",
     ];
-    const rows = logs.map((l) => [
+    const rows = filteredLogs.map((l) => [
       l.log_date,
       l.score,
       `"${l.prompt_level || ""}"`,
@@ -210,9 +265,9 @@ export default function TrackingPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* --- PRINT LAYOUT */}
+      {/* PRINT REPORT (Hidden on Web) */}
       <PrintLayout
-        logs={logs}
+        logs={filteredLogs}
         goalInfo={goalInfo}
         stats={stats}
         settings={reportSettings}
@@ -248,27 +303,42 @@ export default function TrackingPage() {
             onClick={() => window.print()}
             className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:border-zinc-700"
           >
-            <PrinterIcon /> Print Report
+            <PrinterIcon /> Print / Save PDF
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 block print:block">
-        {/* NEW MODULAR FORM */}
+        {/* LEFT COLUMN: FORM */}
         <div className="lg:col-span-7 space-y-6 print:hidden">
           <TrackingForm
             studentName={goalInfo?.student_name || ""}
             goalId={goalId}
             initialData={editingLog}
+            // Pass the learned preference from DB
+            defaultScoreType={goalInfo?.tracking_type || "fraction"}
+            // Listen for changes to save preference
+            onPreferenceUpdate={handleUpdateGoalPreference}
             onSubmit={handleSubmitLog}
             onCancel={() => setEditingLog(null)}
           />
         </div>
 
-        {/* NEW MODULAR TABLE */}
+        {/* RIGHT COLUMN: HISTORY & FILTER */}
         <div className="lg:col-span-5">
+          {/* DATE FILTERS */}
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(s, e) => {
+              setStartDate(s);
+              setEndDate(e);
+            }}
+          />
+
+          {/* HISTORY TABLE & CHART */}
           <LogHistoryTable
-            logs={logs}
+            logs={filteredLogs}
             targetScore={
               goalInfo?.mastery_enabled ? goalInfo.mastery_score : undefined
             }
@@ -280,6 +350,7 @@ export default function TrackingPage() {
         </div>
       </div>
 
+      {/* CONFIRM DELETE MODAL */}
       <ConfirmModal
         isOpen={deleteModalId !== null}
         onClose={() => setDeleteModalId(null)}

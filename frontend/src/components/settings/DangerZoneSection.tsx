@@ -14,8 +14,13 @@ export default function DangerZoneSection() {
     try {
       await dbService.resetDatabase();
       await backupService.disconnect();
-      toast.success("All student data wiped.");
-      setTimeout(() => window.location.reload(), 1000);
+
+      toast.success("Factory Reset Complete. Redirecting...");
+
+      // Force a hard redirect to Home ("/") to trigger the Welcome Wizard
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
     } catch (err) {
       toast.error("Failed to wipe data.");
     }

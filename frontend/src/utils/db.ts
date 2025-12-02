@@ -4,10 +4,10 @@ import type { PGlite } from "@electric-sql/pglite";
 export interface Student {
   id: number;
   name: string;
-  student_id: string;
+  student_id: string | null;
   grade: string;
   class_type: string;
-  iep_date: string;
+  iep_date: string | null;
   active: boolean;
 }
 
@@ -21,6 +21,7 @@ export interface Goal {
   mastery_score: number;
   mastery_count: number;
   frequency: string;
+  tracking_type: "fraction" | "percentage";
   created_at: string;
 }
 
@@ -60,6 +61,21 @@ export interface CustomGoalTemplate {
   subject: string;
   text: string;
   created_at: string;
+}
+
+export interface Manipulative {
+  id: number;
+  label: string;
+}
+
+export interface OverdueGoal {
+  goal_id: number;
+  student_id: number;
+  student_name: string;
+  subject: string;
+  frequency: string;
+  last_log_date: string | null;
+  days_since: number;
 }
 
 // --- LAZY INITIALIZATION ---
@@ -103,7 +119,7 @@ export const initDB = async () => {
       CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
-        student_id TEXT NOT NULL,
+        student_id TEXT, 
         grade TEXT DEFAULT 'K', 
         class_type TEXT DEFAULT 'General Ed',
         iep_date DATE DEFAULT CURRENT_DATE,
@@ -111,23 +127,6 @@ export const initDB = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
-    // Migrations
-    try {
-      await db.exec(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT 'K'"
-      );
-    } catch (e) {}
-    try {
-      await db.exec(
-        "ALTER TABLE students ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT 'General Ed'"
-      );
-    } catch (e) {}
-    try {
-      await db.exec(
-        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS last_backup_at TEXT"
-      );
-    } catch (e) {}
 
     // 3. Goals Table
     await db.exec(`
@@ -141,6 +140,7 @@ export const initDB = async () => {
         mastery_score INTEGER DEFAULT 80,
         mastery_count INTEGER DEFAULT 3,
         frequency TEXT DEFAULT 'Weekly',
+        tracking_type TEXT DEFAULT 'fraction',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -173,6 +173,65 @@ export const initDB = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // 6. Custom Manipulatives Table (NEW)
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS custom_manipulatives (
+        id SERIAL PRIMARY KEY,
+        label TEXT NOT NULL
+      );
+    `);
+
+    // Seed defaults if empty
+    const maniCount = await db.query(
+      "SELECT COUNT(*) as count FROM custom_manipulatives"
+    );
+    if ((maniCount.rows[0] as any).count == 0) {
+      await db.exec(`
+        INSERT INTO custom_manipulatives (label) VALUES 
+        ('Visual Aid'), ('Counters'), ('Tracing'), ('Calculator'), ('Text-to-Speech');
+      `);
+    }
+
+    // --- FIX: DISABLE SEQUENCE CACHING ---
+    try {
+      await db.exec(`
+        ALTER SEQUENCE students_id_seq CACHE 1;
+        ALTER SEQUENCE goals_id_seq CACHE 1;
+        ALTER SEQUENCE tracking_logs_id_seq CACHE 1;
+        ALTER SEQUENCE custom_goals_id_seq CACHE 1;
+      `);
+    } catch (e) {}
+
+    // --- MIGRATIONS ---
+    try {
+      await db.exec(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT 'K'"
+      );
+    } catch (e) {}
+    try {
+      await db.exec(
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT 'General Ed'"
+      );
+    } catch (e) {}
+    try {
+      await db.exec(
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS last_backup_at TEXT"
+      );
+    } catch (e) {}
+    try {
+      await db.exec(
+        "ALTER TABLE students ALTER COLUMN student_id DROP NOT NULL"
+      );
+    } catch (e) {}
+    try {
+      await db.exec("ALTER TABLE students ALTER COLUMN iep_date DROP NOT NULL");
+    } catch (e) {}
+    try {
+      await db.exec(
+        "ALTER TABLE goals ADD COLUMN IF NOT EXISTS tracking_type TEXT DEFAULT 'fraction'"
+      );
+    } catch (e) {}
 
     console.log("Database initialized successfully.");
   } catch (err) {
@@ -233,12 +292,13 @@ export const dbService = {
     studentId: string,
     grade: string,
     classType: string,
-    iepDate: string
+    iepDate: string | null
   ) => {
     const db = await getDB();
+    const safeId = studentId && studentId.trim() !== "" ? studentId : null;
     const res = await db.query(
       "INSERT INTO students (name, student_id, grade, class_type, iep_date) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-      [name, studentId, grade, classType, iepDate]
+      [name, safeId, grade, classType, iepDate]
     );
     return res.rows[0];
   },
@@ -249,13 +309,14 @@ export const dbService = {
     studentId: string,
     grade: string,
     classType: string,
-    iepDate: string,
+    iepDate: string | null,
     active: boolean
   ) => {
     const db = await getDB();
+    const safeId = studentId && studentId.trim() !== "" ? studentId : null;
     await db.query(
       "UPDATE students SET name = $1, student_id = $2, grade = $3, class_type = $4, iep_date = $5, active = $6 WHERE id = $7",
-      [name, studentId, grade, classType, iepDate, active, id]
+      [name, safeId, grade, classType, iepDate, active, id]
     );
   },
 
@@ -288,11 +349,48 @@ export const dbService = {
     return res.rows[0];
   },
 
+  getOverdueGoals: async (): Promise<OverdueGoal[]> => {
+    const db = await getDB();
+    const res = await db.query(`
+      SELECT g.id as goal_id, g.student_id, g.subject, g.frequency, s.name as student_name, MAX(l.log_date) as last_log_date, g.created_at
+      FROM goals g
+      JOIN students s ON g.student_id = s.id
+      LEFT JOIN tracking_logs l ON g.id = l.goal_id
+      WHERE g.active = true AND s.active = true
+      GROUP BY g.id, s.name, s.id
+    `);
+    const now = new Date();
+    const overdue: OverdueGoal[] = [];
+    for (const row of res.rows as any[]) {
+      const lastDate = row.last_log_date
+        ? new Date(row.last_log_date)
+        : new Date(row.created_at);
+      const diffTime = Math.abs(now.getTime() - lastDate.getTime());
+      const daysSince = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      let threshold = 7;
+      if (row.frequency === "Daily") threshold = 1;
+      if (row.frequency === "Bi-Weekly") threshold = 14;
+      if (row.frequency === "Monthly") threshold = 30;
+      if (daysSince > threshold) {
+        overdue.push({
+          goal_id: row.goal_id,
+          student_id: row.student_id,
+          student_name: row.student_name,
+          subject: row.subject,
+          frequency: row.frequency,
+          last_log_date: row.last_log_date,
+          days_since: daysSince,
+        });
+      }
+    }
+    return overdue.sort((a, b) => b.days_since - a.days_since);
+  },
+
   createGoal: async (data: Partial<Goal>) => {
     const db = await getDB();
     await db.query(
-      `INSERT INTO goals (student_id, subject, description, mastery_enabled, mastery_score, mastery_count, frequency) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO goals (student_id, subject, description, mastery_enabled, mastery_score, mastery_count, frequency, tracking_type) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         data.student_id,
         data.subject,
@@ -301,6 +399,7 @@ export const dbService = {
         data.mastery_score || 80,
         data.mastery_count || 3,
         data.frequency || "Weekly",
+        data.tracking_type || "fraction",
       ]
     );
   },
@@ -308,8 +407,8 @@ export const dbService = {
   updateGoal: async (id: number, data: Partial<Goal>) => {
     const db = await getDB();
     await db.query(
-      `UPDATE goals SET subject=$1, description=$2, mastery_enabled=$3, mastery_score=$4, mastery_count=$5, frequency=$6 
-       WHERE id=$7`,
+      `UPDATE goals SET subject=$1, description=$2, mastery_enabled=$3, mastery_score=$4, mastery_count=$5, frequency=$6, tracking_type=$7 
+       WHERE id=$8`,
       [
         data.subject,
         data.description,
@@ -317,6 +416,7 @@ export const dbService = {
         data.mastery_score,
         data.mastery_count,
         data.frequency,
+        data.tracking_type,
         id,
       ]
     );
@@ -344,6 +444,44 @@ export const dbService = {
     return res.rows as unknown as CustomGoalTemplate[];
   },
 
+  updateCustomGoalTemplate: async (
+    id: number,
+    subject: string,
+    text: string
+  ) => {
+    const db = await getDB();
+    await db.query(
+      "UPDATE custom_goals SET subject = $1, text = $2 WHERE id = $3",
+      [subject, text, id]
+    );
+  },
+
+  deleteCustomGoalTemplate: async (id: number) => {
+    const db = await getDB();
+    await db.query("DELETE FROM custom_goals WHERE id = $1", [id]);
+  },
+
+  // MANIPULATIVES (NEW)
+  getManipulatives: async (): Promise<Manipulative[]> => {
+    const db = await getDB();
+    const res = await db.query(
+      "SELECT * FROM custom_manipulatives ORDER BY label ASC"
+    );
+    return res.rows as unknown as Manipulative[];
+  },
+
+  addManipulative: async (label: string) => {
+    const db = await getDB();
+    await db.query("INSERT INTO custom_manipulatives (label) VALUES ($1)", [
+      label,
+    ]);
+  },
+
+  deleteManipulative: async (id: number) => {
+    const db = await getDB();
+    await db.query("DELETE FROM custom_manipulatives WHERE id = $1", [id]);
+  },
+
   // LOGS
   getLogs: async (goalId: number): Promise<TrackingLog[]> => {
     const db = await getDB();
@@ -358,7 +496,6 @@ export const dbService = {
     const db = await getDB();
     const settings = await dbService.getSettings();
     const tester = settings.teacher_name || "Teacher";
-
     await db.query(
       `INSERT INTO tracking_logs 
       (goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, notes, tester_name) 
@@ -418,15 +555,9 @@ export const dbService = {
     const logsThisWeek = await db.query(
       "SELECT COUNT(*) as count FROM tracking_logs WHERE log_date >= CURRENT_DATE - 7"
     );
-
-    const recentLogs = await db.query(`
-      SELECT s.name as student_name, g.subject, l.score, l.log_date, l.goal_id, s.id as student_id 
-      FROM tracking_logs l 
-      JOIN goals g ON l.goal_id = g.id 
-      JOIN students s ON g.student_id = s.id 
-      ORDER BY l.created_at DESC LIMIT 5
-    `);
-
+    const recentLogs = await db.query(
+      `SELECT s.name as student_name, g.subject, l.score, l.log_date, l.goal_id, s.id as student_id FROM tracking_logs l JOIN goals g ON l.goal_id = g.id JOIN students s ON g.student_id = s.id ORDER BY l.created_at DESC LIMIT 5`
+    );
     return {
       student_count: (studentCount.rows[0] as any).count,
       active_goals: (activeGoals.rows[0] as any).count,
@@ -438,16 +569,17 @@ export const dbService = {
   exportBackup: async () => {
     const db = await getDB();
     const now = new Date().toISOString();
-
     await db.query("UPDATE settings SET last_backup_at = $1 WHERE id = 1", [
       now,
     ]);
-
     const students = await db.query("SELECT * FROM students");
     const goals = await db.query("SELECT * FROM goals");
     const logs = await db.query("SELECT * FROM tracking_logs");
     const settings = await db.query("SELECT * FROM settings");
     const customGoals = await db.query("SELECT * FROM custom_goals");
+    const customManipulatives = await db.query(
+      "SELECT * FROM custom_manipulatives"
+    );
 
     return JSON.stringify({
       version: 1,
@@ -457,6 +589,7 @@ export const dbService = {
       logs: logs.rows,
       settings: settings.rows,
       custom_goals: customGoals.rows,
+      custom_manipulatives: customManipulatives.rows,
     });
   },
 
@@ -465,11 +598,9 @@ export const dbService = {
     try {
       const data = JSON.parse(jsonString);
       await db.exec("BEGIN");
-      await db.exec("DELETE FROM tracking_logs");
-      await db.exec("DELETE FROM goals");
-      await db.exec("DELETE FROM students");
-      await db.exec("DELETE FROM settings");
-      await db.exec("DELETE FROM custom_goals");
+      await db.exec(
+        "DELETE FROM tracking_logs; DELETE FROM goals; DELETE FROM students; DELETE FROM settings; DELETE FROM custom_goals; DELETE FROM custom_manipulatives;"
+      );
 
       if (data.settings && data.settings.length > 0) {
         const s = data.settings[0];
@@ -498,8 +629,7 @@ export const dbService = {
 
       for (const g of data.goals) {
         await db.query(
-          `INSERT INTO goals (id, student_id, subject, description, active, mastery_enabled, mastery_score, mastery_count, frequency) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          `INSERT INTO goals (id, student_id, subject, description, active, mastery_enabled, mastery_score, mastery_count, frequency, tracking_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             g.id,
             g.student_id,
@@ -510,14 +640,14 @@ export const dbService = {
             g.mastery_score,
             g.mastery_count,
             g.frequency,
+            g.tracking_type || "fraction",
           ]
         );
       }
 
       for (const l of data.logs) {
         await db.query(
-          `INSERT INTO tracking_logs (id, goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, notes, tester_name) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          `INSERT INTO tracking_logs (id, goal_id, log_date, score, prompt_level, manipulatives_used, manipulatives_type, compliance, behavior, time_spent, notes, tester_name) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [
             l.id,
             l.goal_id,
@@ -544,18 +674,32 @@ export const dbService = {
         }
       }
 
+      // Restore Manipulatives
+      if (data.custom_manipulatives) {
+        for (const m of data.custom_manipulatives) {
+          await db.query(
+            "INSERT INTO custom_manipulatives (label) VALUES ($1)",
+            [m.label]
+          );
+        }
+      } else {
+        // If restoring old backup without manipulatives, add default
+        await db.exec(
+          `INSERT INTO custom_manipulatives (label) VALUES ('Visual Aid'), ('Counters'), ('Tracing'), ('Calculator'), ('Text-to-Speech');`
+        );
+      }
+
       await db.exec(`
         SELECT setval('students_id_seq', (SELECT MAX(id) FROM students));
         SELECT setval('goals_id_seq', (SELECT MAX(id) FROM goals));
         SELECT setval('tracking_logs_id_seq', (SELECT MAX(id) FROM tracking_logs));
         SELECT setval('custom_goals_id_seq', (SELECT MAX(id) FROM custom_goals));
+        SELECT setval('custom_manipulatives_id_seq', (SELECT MAX(id) FROM custom_manipulatives));
       `);
-
       await db.exec("COMMIT");
       return true;
     } catch (e) {
       await db.exec("ROLLBACK");
-      console.error("Restore failed", e);
       throw e;
     }
   },
@@ -567,9 +711,13 @@ export const dbService = {
       DELETE FROM goals;
       DELETE FROM students;
       DELETE FROM custom_goals;
+      DELETE FROM custom_manipulatives;
       DELETE FROM settings;
     `);
-    // Re-initialize settings so the app doesn't crash
     await db.exec("INSERT INTO settings (id) VALUES (1)");
+    // Reseed defaults
+    await db.exec(
+      `INSERT INTO custom_manipulatives (label) VALUES ('Visual Aid'), ('Counters'), ('Tracing'), ('Calculator'), ('Text-to-Speech');`
+    );
   },
 };

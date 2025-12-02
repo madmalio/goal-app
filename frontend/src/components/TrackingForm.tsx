@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { TrackingLog } from "../utils/db";
+import Link from "next/link";
+import { TrackingLog, dbService, Manipulative } from "../utils/db";
 import { useToast } from "../context/ToastContext";
 
-// Reusing your icons and smaller components locally for this form
+// --- ICONS ---
 const ToggleBtn = ({ label, selected, onClick }: any) => (
   <button
     type="button"
@@ -18,7 +19,6 @@ const ToggleBtn = ({ label, selected, onClick }: any) => (
     {label}
   </button>
 );
-
 const MagicIcon = () => (
   <svg
     className="w-5 h-5"
@@ -34,7 +34,6 @@ const MagicIcon = () => (
     />
   </svg>
 );
-
 const MicIcon = () => (
   <svg
     className="w-5 h-5"
@@ -50,7 +49,6 @@ const MicIcon = () => (
     />
   </svg>
 );
-
 const StopIcon = () => (
   <svg
     className="w-5 h-5"
@@ -72,29 +70,54 @@ const StopIcon = () => (
     />
   </svg>
 );
+const CalendarIcon = () => (
+  <svg
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+    />
+  </svg>
+);
 
 interface TrackingFormProps {
   studentName: string;
   goalId: number;
-  initialData?: TrackingLog | null; // If passed, we are in "Edit Mode"
+  initialData?: TrackingLog | null;
+  defaultScoreType?: "fraction" | "percentage";
   onSubmit: (data: Partial<TrackingLog>) => Promise<void>;
   onCancel: () => void;
+  onPreferenceUpdate?: (type: "fraction" | "percentage") => void;
 }
 
 export default function TrackingForm({
   studentName,
   goalId,
   initialData,
+  defaultScoreType = "fraction",
   onSubmit,
   onCancel,
+  onPreferenceUpdate,
 }: TrackingFormProps) {
   const toast = useToast();
 
-  // State
+  const [manipulativesList, setManipulativesList] = useState<Manipulative[]>(
+    []
+  );
   const [date, setDate] = useState(new Date().toLocaleDateString("en-CA"));
+  const [timeSpent, setTimeSpent] = useState("");
+  const [scoreType, setScoreType] = useState<"fraction" | "percentage">(
+    defaultScoreType
+  );
   const [scoreNum, setScoreNum] = useState("");
   const [scoreDenom, setScoreDenom] = useState("");
-  const [timeSpent, setTimeSpent] = useState("");
+  const [scorePercent, setScorePercent] = useState("");
   const [prompts, setPrompts] = useState<string[]>([]);
   const [compliance, setCompliance] = useState("");
   const [behavior, setBehavior] = useState("");
@@ -104,16 +127,23 @@ export default function TrackingForm({
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  // Load initial data when editing
+  useEffect(() => {
+    dbService.getManipulatives().then(setManipulativesList);
+  }, []);
+
   useEffect(() => {
     if (initialData) {
       setDate(initialData.log_date);
       if (initialData.score && initialData.score.includes("/")) {
+        setScoreType("fraction");
         const [n, d] = initialData.score.split("/");
         setScoreNum(n);
         setScoreDenom(d);
-      } else {
-        setScoreNum(initialData.score || "");
+        setScorePercent("");
+      } else if (initialData.score) {
+        setScoreType("percentage");
+        setScorePercent(initialData.score.replace("%", "") || "");
+        setScoreNum("");
         setScoreDenom("");
       }
       setTimeSpent(initialData.time_spent || "");
@@ -128,11 +158,19 @@ export default function TrackingForm({
     } else {
       resetForm();
     }
-  }, [initialData]);
+  }, [initialData, defaultScoreType]);
+
+  useEffect(() => {
+    if (!initialData) {
+      setScoreType(defaultScoreType);
+    }
+  }, [defaultScoreType, initialData]);
 
   const resetForm = () => {
+    setScoreType(defaultScoreType);
     setScoreNum("");
     setScoreDenom("");
+    setScorePercent("");
     setTimeSpent("");
     setPrompts([]);
     setCompliance("");
@@ -149,11 +187,9 @@ export default function TrackingForm({
     );
   };
 
-  // Logic from [cite: 426]
   const handleGenerateNarrative = () => {
     const parts: string[] = [];
     const firstName = studentName ? studentName.split(" ")[0] : "The student";
-
     if (compliance && behavior)
       parts.push(
         `${firstName} was ${compliance.toLowerCase()} compliant and demonstrated ${behavior.toLowerCase()} behavior.`
@@ -165,20 +201,26 @@ export default function TrackingForm({
         `${firstName} demonstrated ${behavior.toLowerCase()} behavior.`
       );
 
-    if (scoreNum) {
-      let perf = `They achieved a score of ${scoreNum}`;
-      if (scoreDenom) perf += `/${scoreDenom}`;
-      if (prompts.length > 0) {
-        const expand: Record<string, string> = {
-          HOH: "Hand-over-Hand",
-          VIP: "Visual Prompts",
-          VP: "Verbal Prompts",
-          IND: "Independence",
-        };
-        const pText = prompts.map((p) => expand[p] || p).join(" and ");
-        perf += ` with ${pText}`;
-      }
-      parts.push(perf + ".");
+    if (scoreType === "fraction" && scoreNum && scoreDenom) {
+      parts.push(`They achieved a score of ${scoreNum}/${scoreDenom}`);
+    } else if (scoreType === "percentage" && scorePercent) {
+      parts.push(`They achieved ${scorePercent}% accuracy`);
+    }
+
+    if (prompts.length > 0) {
+      const expand: Record<string, string> = {
+        HOH: "Hand-over-Hand",
+        VIP: "Visual Prompts",
+        VP: "Verbal Prompts",
+        IND: "Independence",
+      };
+      const pText = prompts.map((p) => expand[p] || p).join(" and ");
+      if (parts.length > 0 && (scoreNum || scorePercent))
+        parts[parts.length - 1] += ` with ${pText}.`;
+      else parts.push(`Task completed with ${pText}.`);
+    } else {
+      if (parts.length > 0 && (scoreNum || scorePercent))
+        parts[parts.length - 1] += ".";
     }
 
     if (hasManipulatives)
@@ -193,13 +235,11 @@ export default function TrackingForm({
       toast.error("Fill in some data first.");
       return;
     }
-
     const narrative = parts.join(" ");
     setNotes((prev) => (prev ? prev + "\n" + narrative : narrative));
     toast.success("Narrative generated!");
   };
 
-  // Logic from [cite: 419]
   const toggleListening = () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
@@ -231,10 +271,17 @@ export default function TrackingForm({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalScore =
-      scoreNum && scoreDenom ? `${scoreNum}/${scoreDenom}` : scoreNum;
+    if (!initialData && scoreType !== defaultScoreType && onPreferenceUpdate) {
+      onPreferenceUpdate(scoreType);
+    }
+    let finalScore = "";
+    if (scoreType === "fraction") {
+      finalScore =
+        scoreNum && scoreDenom ? `${scoreNum}/${scoreDenom}` : scoreNum;
+    } else {
+      finalScore = scorePercent ? `${scorePercent}%` : "";
+    }
     const finalPrompts = prompts.join(", ");
-
     await onSubmit({
       goal_id: goalId,
       log_date: date,
@@ -247,8 +294,7 @@ export default function TrackingForm({
       manipulatives_type: hasManipulatives ? manipulativesType : "",
       notes,
     });
-
-    if (!initialData) resetForm(); // Only reset if adding new
+    if (!initialData) resetForm();
   };
 
   return (
@@ -271,19 +317,27 @@ export default function TrackingForm({
         </div>
       )}
 
-      {/* Date, Time, Score Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Date & Time */}
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
             Date
           </label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            required
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-          />
+          <div className="relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+              <CalendarIcon />
+            </div>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+              onClick={(e) =>
+                (e.currentTarget as HTMLInputElement).showPicker()
+              }
+              className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white [color-scheme:light] dark:[color-scheme:dark] cursor-pointer"
+            />
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
@@ -297,30 +351,85 @@ export default function TrackingForm({
             className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
-            Score (Correct / Total)
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={scoreNum}
-              onChange={(e) => setScoreNum(e.target.value)}
-              placeholder="20"
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center"
-            />
-            <span className="text-slate-400 font-bold text-xl">/</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={scoreDenom}
-              onChange={(e) => setScoreDenom(e.target.value)}
-              placeholder="25"
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center"
-            />
-          </div>
+      </div>
+
+      {/* SCORE SECTION */}
+      <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 dark:bg-zinc-800/50 dark:border-zinc-700">
+        <label className="block text-sm font-bold mb-3 dark:text-zinc-300 text-center">
+          Data Collection Mode
+        </label>
+        <div className="flex bg-white dark:bg-zinc-900 p-1 rounded-md border border-slate-200 dark:border-zinc-700 mb-4">
+          <button
+            type="button"
+            onClick={() => setScoreType("fraction")}
+            className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${
+              scoreType === "fraction"
+                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
+                : "text-slate-500 hover:text-slate-700 dark:text-zinc-500"
+            }`}
+          >
+            Count (x/y)
+          </button>
+          <button
+            type="button"
+            onClick={() => setScoreType("percentage")}
+            className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${
+              scoreType === "percentage"
+                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
+                : "text-slate-500 hover:text-slate-700 dark:text-zinc-500"
+            }`}
+          >
+            Percentage (%)
+          </button>
         </div>
+        {scoreType === "fraction" ? (
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
+                Correct
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={scoreNum}
+                onChange={(e) => setScoreNum(e.target.value)}
+                placeholder="8"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
+              />
+            </div>
+            <span className="text-slate-400 font-bold text-2xl mt-4">/</span>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
+                Total
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={scoreDenom}
+                onChange={(e) => setScoreDenom(e.target.value)}
+                placeholder="10"
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="relative max-w-[150px] mx-auto">
+            <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
+              Accuracy
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={scorePercent}
+              onChange={(e) => setScorePercent(e.target.value)}
+              placeholder="80"
+              className="w-full pl-4 pr-8 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
+            />
+            <span className="absolute right-4 top-8 text-slate-400 font-bold">
+              %
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Prompts Section */}
@@ -338,9 +447,35 @@ export default function TrackingForm({
             />
           ))}
         </div>
+        <div className="mt-3 text-xs text-slate-500 bg-slate-50 dark:bg-zinc-800 border border-slate-100 dark:border-zinc-700 rounded-md p-2 flex flex-wrap gap-x-4 gap-y-1 justify-center">
+          <span className="flex items-center gap-1">
+            <span className="font-bold text-slate-700 dark:text-zinc-300">
+              HOH
+            </span>{" "}
+            Hand over Hand
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-bold text-slate-700 dark:text-zinc-300">
+              VIP
+            </span>{" "}
+            Visual Prompt
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-bold text-slate-700 dark:text-zinc-300">
+              VP
+            </span>{" "}
+            Verbal Prompt
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-bold text-slate-700 dark:text-zinc-300">
+              IND
+            </span>{" "}
+            Independent
+          </span>
+        </div>
       </div>
 
-      {/* Behavior & Compliance Grid */}
+      {/* Behavior & Compliance */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-2 dark:text-zinc-300">
@@ -374,34 +509,54 @@ export default function TrackingForm({
         </div>
       </div>
 
-      {/* Manipulatives */}
+      {/* MANIPULATIVES */}
       <div className="p-4 rounded-xl border bg-slate-50 border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-sm text-slate-700 dark:text-zinc-300">
+        {/* FIX: Flex + Items-center removes the margin-bottom glitch */}
+        <div className="flex items-center justify-between">
+          <label
+            className="text-sm text-slate-700 dark:text-zinc-300 cursor-pointer select-none"
+            htmlFor="mani-toggle"
+          >
             Used Manipulatives?
           </label>
           <input
+            id="mani-toggle"
             type="checkbox"
             checked={hasManipulatives}
             onChange={(e) => setHasManipulatives(e.target.checked)}
-            className="w-5 h-5 accent-indigo-500"
+            className="w-5 h-5 accent-indigo-500 cursor-pointer"
           />
         </div>
+
         {hasManipulatives && (
-          <select
-            value={manipulativesType}
-            onChange={(e) => setManipulativesType(e.target.value)}
-            className="w-full mt-2 px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-          >
-            <option value="">Select Type...</option>
-            <option value="Visual Aid">Visual Aid</option>
-            <option value="Counters">Counters</option>
-            <option value="Tracing">Tracing</option>
-          </select>
+          <div className="mt-3 space-y-2 animate-fade-in">
+            <select
+              value={manipulativesType}
+              onChange={(e) => setManipulativesType(e.target.value)}
+              className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+            >
+              <option value="">Select Type...</option>
+              {manipulativesList.map((m) => (
+                <option key={m.id} value={m.label}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+
+            {/* LIBRARY LINK with TAB */}
+            <div className="text-right">
+              <Link
+                href="/library?tab=tools"
+                className="text-[10px] text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 underline font-medium"
+              >
+                + Add or Edit Tools
+              </Link>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Notes & Actions */}
+      {/* Notes */}
       <div>
         <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
           Session Notes

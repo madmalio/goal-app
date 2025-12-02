@@ -9,9 +9,7 @@ import { useToast } from "../../../../context/ToastContext";
 import SmartGoalGenerator from "../../../../components/SmartGoalGenerator";
 import Link from "next/link";
 
-// ... (ICONS BLOCK: CalendarIcon, MicIcon, StopIcon, MagicIcon, ChevronDownIcon, DownloadIcon) ...
-// [Keep existing icons here to save space in this snippet]
-// IMPORTANT: Ensure MagicIcon is the Wand version:
+// --- ICONS ---
 const MagicIcon = () => (
   <svg
     className="w-5 h-5"
@@ -93,21 +91,6 @@ const ChevronDownIcon = () => (
     />
   </svg>
 );
-const DownloadIcon = () => (
-  <svg
-    className="w-4 h-4"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-    />
-  </svg>
-);
 
 export default function StudentPage() {
   const params = useParams();
@@ -117,7 +100,6 @@ export default function StudentPage() {
 
   const [student, setStudent] = useState<Student | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
-
   const [isAddingGoal, setIsAddingGoal] = useState(false);
   const [isEditingStudent, setIsEditingStudent] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<number | null>(null);
@@ -126,21 +108,25 @@ export default function StudentPage() {
   const [goalToDelete, setGoalToDelete] = useState<number | null>(null);
   const [showSmartGenerator, setShowSmartGenerator] = useState(false);
 
+  // Goal Form State
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [masteryEnabled, setMasteryEnabled] = useState(false);
   const [masteryScore, setMasteryScore] = useState(80);
   const [masteryCount, setMasteryCount] = useState(3);
   const [frequency, setFrequency] = useState("Weekly");
-
-  // NEW: Save to Library Checkbox
   const [saveToLibrary, setSaveToLibrary] = useState(false);
+  const [trackingType, setTrackingType] = useState<"fraction" | "percentage">(
+    "fraction"
+  );
 
+  // Edit Student Form State
   const [editName, setEditName] = useState("");
   const [editId, setEditId] = useState("");
   const [editGrade, setEditGrade] = useState("K");
   const [editClassType, setEditClassType] = useState("General Ed");
   const [editDate, setEditDate] = useState("");
+  const [hasIepDate, setHasIepDate] = useState(true); // <--- NEW TOGGLE
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -156,13 +142,18 @@ export default function StudentPage() {
       if (found) {
         setStudent(found);
         setEditName(found.name);
-        setEditId(found.student_id);
+        setEditId(found.student_id || "");
         setEditGrade(found.grade || "K");
         setEditClassType(found.class_type || "General Ed");
-        const d = found.iep_date
-          ? new Date(found.iep_date).toISOString().split("T")[0]
-          : "";
-        setEditDate(d);
+
+        // Handle Null Date
+        if (found.iep_date) {
+          setHasIepDate(true);
+          setEditDate(new Date(found.iep_date).toISOString().split("T")[0]);
+        } else {
+          setHasIepDate(false);
+          setEditDate(new Date().toISOString().split("T")[0]);
+        }
       } else {
         toast.error("Student not found");
       }
@@ -177,25 +168,27 @@ export default function StudentPage() {
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!student) return;
+    const finalDate = hasIepDate ? editDate : null;
     await dbService.updateStudent(
       student.id,
       editName,
       editId,
       editGrade,
       editClassType,
-      editDate,
+      finalDate,
       student.active
     );
     setIsEditingStudent(false);
     loadData();
     toast.success("Student updated");
   };
+
   const handleArchive = async () => {
     if (!student) return;
     await dbService.updateStudent(
       student.id,
       student.name,
-      student.student_id,
+      student.student_id || "",
       student.grade,
       student.class_type,
       student.iep_date,
@@ -204,6 +197,7 @@ export default function StudentPage() {
     toast.success("Student archived");
     router.push("/");
   };
+
   const handleDelete = async () => {
     if (!student) return;
     await dbService.deleteStudent(student.id);
@@ -222,6 +216,7 @@ export default function StudentPage() {
         mastery_score: Number(masteryScore),
         mastery_count: Number(masteryCount),
         frequency,
+        tracking_type: trackingType,
       };
       if (editingGoalId) {
         await dbService.updateGoal(editingGoalId, payload);
@@ -230,13 +225,10 @@ export default function StudentPage() {
         await dbService.createGoal(payload);
         toast.success("Goal created");
 
-        // NEW: Save to Custom Library Logic
         if (saveToLibrary && description && subject) {
           const firstName = student?.name.split(" ")[0] || "";
-          // Replace "Lucy" with "{{name}}"
           const regex = new RegExp(firstName, "gi");
           const template = description.replace(regex, "{{name}}");
-
           await dbService.createCustomGoalTemplate(subject, template);
           toast.success("Saved to your Goal Library!");
         }
@@ -250,6 +242,7 @@ export default function StudentPage() {
       setMasteryScore(80);
       setMasteryCount(3);
       setFrequency("Weekly");
+      setTrackingType("fraction");
       setSaveToLibrary(false);
       loadData();
     } catch (err) {
@@ -257,7 +250,6 @@ export default function StudentPage() {
     }
   };
 
-  // MAGIC WAND SHUFFLE
   const handleGenerateGoal = async () => {
     if (!subject) {
       toast.error("Please enter a Subject first.");
@@ -265,7 +257,6 @@ export default function StudentPage() {
     }
     if (!student) return;
 
-    // Fetch Custom Goals first
     const customGoals = await dbService.getCustomGoalTemplates();
     const suggestions = findSmartGoals(
       subject,
@@ -274,9 +265,8 @@ export default function StudentPage() {
       student.name,
       customGoals
     );
-
     if (suggestions.length > 0) {
-      const randomGoal = suggestions[0]; // Get top match
+      const randomGoal = suggestions[0];
       setDescription(randomGoal.text);
       toast.success("Suggestion applied! Click 'Goal Wizard' for more.");
     } else {
@@ -321,6 +311,9 @@ export default function StudentPage() {
     setMasteryScore(goal.mastery_score);
     setMasteryCount(goal.mastery_count);
     setFrequency(goal.frequency);
+    setTrackingType(
+      (goal.tracking_type as "fraction" | "percentage") || "fraction"
+    );
     setIsAddingGoal(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -338,7 +331,6 @@ export default function StudentPage() {
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
       <div className="flex justify-between items-start border-b pb-4 border-slate-200 dark:border-zinc-800">
         <div>
           <div className="flex items-center gap-3">
@@ -365,8 +357,10 @@ export default function StudentPage() {
             </button>
           </div>
           <p className="text-slate-500 dark:text-zinc-400 text-sm">
-            ID: {student.student_id} • {student.grade} / {student.class_type} •
-            IEP Date: {new Date(student.iep_date).toLocaleDateString()}
+            {student.student_id ? `ID: ${student.student_id} • ` : ""}
+            {student.grade} / {student.class_type}
+            {student.iep_date &&
+              ` • IEP Date: ${new Date(student.iep_date).toLocaleDateString()}`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -449,11 +443,13 @@ export default function StudentPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
-                    Student ID
+                    Student ID{" "}
+                    <span className="text-slate-400 font-normal text-xs">
+                      (Optional)
+                    </span>
                   </label>
                   <input
                     type="text"
-                    required
                     value={editId}
                     onChange={(e) => setEditId(e.target.value)}
                     className="w-full px-3 py-2 rounded-md border bg-slate-50 dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
@@ -509,24 +505,37 @@ export default function StudentPage() {
                   <option value="OT">Occupational Therapy</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
-                  IEP Date
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                    <CalendarIcon />
-                  </div>
+
+              {/* DATE TOGGLE */}
+              <div className="p-3 bg-slate-50 dark:bg-zinc-800/50 rounded-lg border border-slate-200 dark:border-zinc-800">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-bold text-slate-700 dark:text-zinc-300">
+                    Track IEP Date?
+                  </label>
                   <input
-                    type="date"
-                    required
-                    className="w-full pl-10 pr-3 py-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
-                    value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
-                    onClick={(e) => e.currentTarget.showPicker()}
+                    type="checkbox"
+                    checked={hasIepDate}
+                    onChange={(e) => setHasIepDate(e.target.checked)}
+                    className="w-5 h-5 accent-indigo-600 rounded cursor-pointer"
                   />
                 </div>
+                {hasIepDate && (
+                  <div className="relative mt-2">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                      <CalendarIcon />
+                    </div>
+                    <input
+                      type="date"
+                      required
+                      className="w-full pl-10 pr-3 py-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700 dark:text-white"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      onClick={(e) => e.currentTarget.showPicker()}
+                    />
+                  </div>
+                )}
               </div>
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -580,6 +589,7 @@ export default function StudentPage() {
                 </button>
               </div>
             </div>
+
             <div className="p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-md border border-slate-200 dark:border-zinc-800">
               <div className="flex items-center gap-2 mb-3">
                 <input
@@ -646,6 +656,7 @@ export default function StudentPage() {
                 </div>
               )}
             </div>
+
             <div className="relative">
               <label className="block text-sm font-medium mb-1">
                 Description
@@ -680,7 +691,6 @@ export default function StudentPage() {
               </div>
             </div>
 
-            {/* NEW SAVE TO LIBRARY CHECKBOX */}
             {!editingGoalId && (
               <div className="flex items-center gap-2 pt-2 pb-4">
                 <input
@@ -827,7 +837,6 @@ export default function StudentPage() {
         confirmText="Delete"
         isDestructive
       />
-
       <SmartGoalGenerator
         isOpen={showSmartGenerator}
         onClose={() => setShowSmartGenerator(false)}

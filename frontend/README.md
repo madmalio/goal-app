@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Goal Master 🎓
 
-## Getting Started
+A local-first, privacy-focused IEP goal tracking application for special education professionals.
 
-First, run the development server:
+## 🌟 Key Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Local-First Database:** Uses PGlite (PostgreSQL in WebAssembly) to run a full SQL database inside the browser. Data never leaves the device.
+- **Offline Capable:** Fully functional without internet access (PWA).
+- **Auto-Backup:** Integrates with the File System Access API to sync data silently to the hard drive.
+- **Smart Reporting:** Visual charts, date-range filtering, and print-optimized reports.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Framework:** Next.js 15 (App Router)
+- **Database:** ElectricSQL PGlite (In-browser Postgres)
+- **Styling:** Tailwind CSS + dark mode
+- **Charts:** Recharts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🚀 Getting Started
 
-## Learn More
+1. Install dependencies:
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   npm install
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+    Run the development server:
+    Bash
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+    npm run dev
 
-## Deploy on Vercel
+    Open http://localhost:3000
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+🔒 Privacy & Security
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+    App Lock: Users can set a 4-digit PIN to obscure data when away from the screen.
+
+    Data Persistence: Data persists in IndexedDB. Clearing browser cache will delete data (unless backed up).
+
+📦 Deployment
+
+This app is designed as a Static/Client-side application. It can be deployed to Vercel, Netlify, or GitHub Pages.
+
+### 3. Final Pre-Flight Checklist
+
+Before you close your laptop, run through this loop one last time:
+
+1.  **Fresh Install:** Open an Incognito window (simulates a new user).
+2.  **Onboarding:** Go through the "Welcome Modal". Enter a name.
+3.  **Backup:** Connect the Auto-Backup file.
+4.  **Creation:** Add a student and a goal (set tracking to "Percentage").
+5.  **Tracking:** Log 3 days of data.
+6.  **Reporting:** Check the Dashboard "Needs Attention" widget (it should be empty now) and check the Student Page chart.
+7.  **Wipe:** Go to Settings -> Danger Zone -> Wipe Data. Verify it kicks you back to the Welcome screen.
+
+If all that works, **you are done.**
+
+Congratulations on building **Goal Master**. It is a tool that will genuinely help teachers save time. Let me know if you ever want to build V2! 🚀

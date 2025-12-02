@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { dbService, Student } from "../utils/db";
 import { usePrivacy } from "../context/PrivacyContext";
 import { useToast } from "../context/ToastContext";
+import { useStudent } from "../context/StudentContext";
 
 // --- ICONS ---
-
 const LockIcon = () => (
   <svg
     className="w-5 h-5"
@@ -24,8 +23,6 @@ const LockIcon = () => (
     />
   </svg>
 );
-
-// FIXED: Clean, simple Cog Icon
 const SettingsIcon = () => (
   <svg
     className="w-5 h-5 mr-3 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 dark:group-hover:text-white"
@@ -47,7 +44,6 @@ const SettingsIcon = () => (
     />
   </svg>
 );
-
 const DashboardIcon = ({ active }: { active: boolean }) => (
   <svg
     className={`w-5 h-5 mr-3 ${
@@ -61,11 +57,25 @@ const DashboardIcon = ({ active }: { active: boolean }) => (
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth={2}
-      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"
     />
   </svg>
 );
-
+const BookIcon = () => (
+  <svg
+    className="w-5 h-5 mr-3 text-slate-400 group-hover:text-slate-600 dark:text-zinc-500 dark:group-hover:text-white"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+    />
+  </svg>
+);
 const SearchIcon = () => (
   <svg
     className="w-4 h-4 absolute left-2.5 top-2 text-slate-400 dark:text-zinc-500"
@@ -85,23 +95,11 @@ const SearchIcon = () => (
 export default function Sidebar() {
   const { lockApp, hasPin } = usePrivacy();
   const toast = useToast();
-  const [students, setStudents] = useState<Student[]>([]);
+  const { students, openAddModal } = useStudent();
+
   const [searchQuery, setSearchQuery] = useState("");
   const pathname = usePathname();
   const router = useRouter();
-
-  useEffect(() => {
-    fetchStudents();
-  }, [pathname]);
-
-  const fetchStudents = async () => {
-    try {
-      const data = await dbService.getStudents();
-      if (Array.isArray(data)) setStudents(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
   const handleLockClick = () => {
     if (hasPin) {
@@ -115,7 +113,8 @@ export default function Sidebar() {
   const filteredStudents = students.filter(
     (student) =>
       student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.student_id.toLowerCase().includes(searchQuery.toLowerCase())
+      (student.student_id &&
+        student.student_id.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -186,7 +185,12 @@ export default function Sidebar() {
               </p>
             )}
             {filteredStudents.map((student) => {
-              const isActive = pathname.startsWith(`/student/${student.id}`);
+              // --- FIXED LOGIC ---
+              // Check if path is EXACTLY this student OR a sub-path of this student (e.g. /goal/1)
+              const isActive =
+                pathname === `/student/${student.id}` ||
+                pathname.startsWith(`/student/${student.id}/`);
+
               return (
                 <Link
                   key={student.id}
@@ -227,6 +231,18 @@ export default function Sidebar() {
             </button>
 
             <Link
+              href="/library"
+              className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all ${
+                pathname === "/library"
+                  ? "bg-slate-100 text-slate-900 dark:bg-zinc-800 dark:text-white"
+                  : "text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <BookIcon />
+              Resources
+            </Link>
+
+            <Link
               href="/settings"
               className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all 
                 ${
@@ -244,12 +260,12 @@ export default function Sidebar() {
 
       {/* NEW STUDENT BUTTON */}
       <div className="p-4 border-t transition-colors border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900">
-        <Link
-          href="/?newStudent=true"
+        <button
+          onClick={openAddModal}
           className="flex items-center justify-center gap-2 w-full px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-bold transition-colors bg-indigo-600 text-white hover:bg-indigo-700"
         >
           <span>+</span> <span>New Student</span>
-        </Link>
+        </button>
       </div>
     </div>
   );
