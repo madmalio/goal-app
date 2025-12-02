@@ -9,6 +9,8 @@ import LogHistoryTable from "@/components/LogHistoryTable";
 import PrintLayout from "@/components/PrintLayout";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { useToast } from "@/context/ToastContext";
+import UpgradeModal from "@/components/UpgradeModal"; // <--- Import
+import { APP_CONFIG } from "@/config"; // <--- Import
 
 // --- ICONS ---
 const DownloadIcon = () => (
@@ -48,11 +50,8 @@ export default function TrackingPage() {
   const router = useRouter();
   const toast = useToast();
 
-  // Data State
   const [logs, setLogs] = useState<TrackingLog[]>([]);
   const [goalInfo, setGoalInfo] = useState<any>(null);
-
-  // UI State
   const [editingLog, setEditingLog] = useState<TrackingLog | null>(null);
   const [reportSettings, setReportSettings] = useState({
     school: "",
@@ -60,12 +59,10 @@ export default function TrackingPage() {
   });
   const [deleteModalId, setDeleteModalId] = useState<number | null>(null);
   const [isMastered, setIsMastered] = useState(false);
-
-  // Filter State
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [showPaywall, setShowPaywall] = useState(false); // <--- New State
 
-  // 1. Load Initial Data
   useEffect(() => {
     dbService
       .getSettings()
@@ -87,135 +84,26 @@ export default function TrackingPage() {
     }
   };
 
-  // 2. Filter Logs based on Date Range
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      if (!startDate && !endDate) return true;
-
-      const logDate = new Date(log.log_date);
-      // Normalize time to midnight for accurate comparison
-      logDate.setHours(0, 0, 0, 0);
-
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        if (logDate < start) return false;
+  // --- PAYWALL CHECKERS ---
+  const checkPaywall = async () => {
+    if (APP_CONFIG.ENABLE_PAYWALL) {
+      const { license_status } = await dbService.getLicenseStatus();
+      if (license_status !== "active") {
+        setShowPaywall(true);
+        return true; // Blocked
       }
-
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // Include the entire end day
-        if (logDate > end) return false;
-      }
-
-      return true;
-    });
-  }, [logs, startDate, endDate]);
-
-  // 3. Calculate Mastery (Based on ALL logs logic to determine current status)
-  useEffect(() => {
-    if (!logs.length || !goalInfo) return;
-    if (!goalInfo.mastery_enabled) {
-      setIsMastered(false);
-      return;
     }
-    const target = goalInfo.mastery_score || 80;
-    const requiredCount = goalInfo.mastery_count || 3;
-    let streak = 0;
-
-    // Check most recent logs (logs are already sorted DESC from DB)
-    for (const log of logs) {
-      let percent = 0;
-      if (log.score.includes("/")) {
-        const [n, d] = log.score.split("/").map(Number);
-        if (d > 0) percent = (n / d) * 100;
-      } else {
-        percent = parseFloat(log.score) || 0;
-      }
-      if (percent >= target) streak++;
-      else break;
-    }
-    setIsMastered(streak >= requiredCount);
-  }, [logs, goalInfo]);
-
-  // 4. Calculate Stats (Based on FILTERED logs for reporting)
-  const stats = useMemo(() => {
-    if (!filteredLogs.length) return { average: "N/A", count: 0 };
-    let totalPercent = 0;
-    let count = 0;
-
-    filteredLogs.forEach((l) => {
-      if (l.score && l.score.includes("/")) {
-        const [num, den] = l.score.split("/").map(Number);
-        if (!isNaN(num) && !isNaN(den) && den > 0) {
-          totalPercent += num / den;
-          count++;
-        }
-      } else {
-        const val = parseFloat(l.score);
-        if (!isNaN(val)) {
-          totalPercent += val / 100;
-          count++;
-        }
-      }
-    });
-
-    return {
-      count: filteredLogs.length,
-      average:
-        count > 0 ? Math.round((totalPercent / count) * 100) + "%" : "N/A",
-    };
-  }, [filteredLogs]);
-
-  // 5. Handlers
-  const handleSubmitLog = async (data: Partial<TrackingLog>) => {
-    try {
-      if (editingLog) {
-        await dbService.updateLog(editingLog.id, data);
-        setEditingLog(null);
-      } else {
-        await dbService.createLog(data);
-      }
-      loadData();
-      toast.success("Log saved successfully");
-    } catch {
-      toast.error("Failed to save log");
-    }
+    return false; // Allowed
   };
 
-  // --- NEW: Handle Smart Preference Update ---
-  const handleUpdateGoalPreference = async (
-    newType: "fraction" | "percentage"
-  ) => {
-    if (goalInfo?.tracking_type !== newType) {
-      try {
-        await dbService.updateGoal(goalId, {
-          ...goalInfo,
-          tracking_type: newType,
-        });
-        // We reload data to ensure the UI has the latest "default" for next time
-        loadData();
-      } catch (e) {
-        console.error("Failed to update preference", e);
-      }
-    }
+  const handlePrintClick = async () => {
+    if (await checkPaywall()) return;
+    window.print();
   };
 
-  const confirmDelete = async () => {
-    if (!deleteModalId) return;
-    try {
-      await dbService.deleteLog(deleteModalId);
-      loadData();
-      if (editingLog?.id === deleteModalId) setEditingLog(null);
-      toast.success("Log deleted");
-    } catch {
-      toast.error("Failed to delete");
-    } finally {
-      setDeleteModalId(null);
-    }
-  };
+  const handleExportCSV = async () => {
+    if (await checkPaywall()) return;
 
-  const handleExportCSV = () => {
     if (!filteredLogs.length) {
       toast.error("No logs to export in this date range");
       return;
@@ -263,9 +151,122 @@ export default function TrackingPage() {
     toast.success("Report downloaded");
   };
 
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      if (!startDate && !endDate) return true;
+      const logDate = new Date(log.log_date);
+      logDate.setHours(0, 0, 0, 0);
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        if (logDate < start) return false;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        if (logDate > end) return false;
+      }
+      return true;
+    });
+  }, [logs, startDate, endDate]);
+
+  useEffect(() => {
+    if (!logs.length || !goalInfo) return;
+    if (!goalInfo.mastery_enabled) {
+      setIsMastered(false);
+      return;
+    }
+    const target = goalInfo.mastery_score || 80;
+    const requiredCount = goalInfo.mastery_count || 3;
+    let streak = 0;
+    for (const log of logs) {
+      let percent = 0;
+      if (log.score.includes("/")) {
+        const [n, d] = log.score.split("/").map(Number);
+        if (d > 0) percent = (n / d) * 100;
+      } else {
+        percent = parseFloat(log.score) || 0;
+      }
+      if (percent >= target) streak++;
+      else break;
+    }
+    setIsMastered(streak >= requiredCount);
+  }, [logs, goalInfo]);
+
+  const stats = useMemo(() => {
+    if (!filteredLogs.length) return { average: "N/A", count: 0 };
+    let totalPercent = 0;
+    let count = 0;
+    filteredLogs.forEach((l) => {
+      if (l.score && l.score.includes("/")) {
+        const [num, den] = l.score.split("/").map(Number);
+        if (!isNaN(num) && !isNaN(den) && den > 0) {
+          totalPercent += num / den;
+          count++;
+        }
+      } else {
+        const val = parseFloat(l.score);
+        if (!isNaN(val)) {
+          totalPercent += val / 100;
+          count++;
+        }
+      }
+    });
+    return {
+      count: filteredLogs.length,
+      average:
+        count > 0 ? Math.round((totalPercent / count) * 100) + "%" : "N/A",
+    };
+  }, [filteredLogs]);
+
+  const handleSubmitLog = async (data: Partial<TrackingLog>) => {
+    try {
+      if (editingLog) {
+        await dbService.updateLog(editingLog.id, data);
+        setEditingLog(null);
+      } else {
+        await dbService.createLog(data);
+      }
+      loadData();
+      toast.success("Log saved successfully");
+    } catch {
+      toast.error("Failed to save log");
+    }
+  };
+
+  const handleUpdateGoalPreference = async (
+    newType: "fraction" | "percentage"
+  ) => {
+    if (goalInfo?.tracking_type !== newType) {
+      try {
+        await dbService.updateGoal(goalId, {
+          ...goalInfo,
+          tracking_type: newType,
+        });
+        loadData();
+      } catch (e) {
+        console.error("Failed to update preference", e);
+      }
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModalId) return;
+    try {
+      await dbService.deleteLog(deleteModalId);
+      loadData();
+      if (editingLog?.id === deleteModalId) setEditingLog(null);
+      toast.success("Log deleted");
+    } catch {
+      toast.error("Failed to delete");
+    } finally {
+      setDeleteModalId(null);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* PRINT REPORT (Hidden on Web) */}
+      {/* PRINT LAYOUT */}
       <PrintLayout
         logs={filteredLogs}
         goalInfo={goalInfo}
@@ -274,7 +275,7 @@ export default function TrackingPage() {
         isMastered={isMastered}
       />
 
-      {/* WEB HEADER */}
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-6 print:hidden">
         <div className="flex items-center space-x-4">
           <button
@@ -300,7 +301,7 @@ export default function TrackingPage() {
             <DownloadIcon /> Export CSV
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={handlePrintClick}
             className="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:border-zinc-700"
           >
             <PrinterIcon /> Print / Save PDF
@@ -309,24 +310,21 @@ export default function TrackingPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 block print:block">
-        {/* LEFT COLUMN: FORM */}
+        {/* FORM */}
         <div className="lg:col-span-7 space-y-6 print:hidden">
           <TrackingForm
             studentName={goalInfo?.student_name || ""}
             goalId={goalId}
             initialData={editingLog}
-            // Pass the learned preference from DB
             defaultScoreType={goalInfo?.tracking_type || "fraction"}
-            // Listen for changes to save preference
-            onPreferenceUpdate={handleUpdateGoalPreference}
             onSubmit={handleSubmitLog}
             onCancel={() => setEditingLog(null)}
+            onPreferenceUpdate={handleUpdateGoalPreference}
           />
         </div>
 
-        {/* RIGHT COLUMN: HISTORY & FILTER */}
+        {/* HISTORY */}
         <div className="lg:col-span-5">
-          {/* DATE FILTERS */}
           <DateRangeFilter
             startDate={startDate}
             endDate={endDate}
@@ -335,8 +333,6 @@ export default function TrackingPage() {
               setEndDate(e);
             }}
           />
-
-          {/* HISTORY TABLE & CHART */}
           <LogHistoryTable
             logs={filteredLogs}
             targetScore={
@@ -350,7 +346,6 @@ export default function TrackingPage() {
         </div>
       </div>
 
-      {/* CONFIRM DELETE MODAL */}
       <ConfirmModal
         isOpen={deleteModalId !== null}
         onClose={() => setDeleteModalId(null)}
@@ -359,6 +354,10 @@ export default function TrackingPage() {
         message="Are you sure you want to delete this record? This cannot be undone."
         confirmText="Delete"
         isDestructive
+      />
+      <UpgradeModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
       />
     </div>
   );

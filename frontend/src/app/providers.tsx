@@ -7,6 +7,7 @@ import { ToastProvider } from "../context/ToastContext";
 import { PrivacyProvider } from "../context/PrivacyContext";
 import { BackupProvider } from "../context/BackupContext";
 import { StudentProvider } from "../context/StudentContext";
+import { InstallProvider } from "../context/InstallContext"; // <--- NEW IMPORT
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isDbReady, setIsDbReady] = useState(false);
@@ -97,7 +98,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ToastProvider>
         <PrivacyProvider>
           <BackupProvider>
-            <StudentProvider>{children}</StudentProvider>
+            <StudentProvider>
+              <InstallProvider>
+                {" "}
+                {/* <--- WRAPPER ADDED HERE */}
+                {children}
+              </InstallProvider>
+            </StudentProvider>
           </BackupProvider>
         </PrivacyProvider>
       </ToastProvider>

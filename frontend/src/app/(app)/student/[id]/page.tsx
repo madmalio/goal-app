@@ -8,6 +8,8 @@ import ConfirmModal from "../../../../components/ConfirmModal";
 import { useToast } from "../../../../context/ToastContext";
 import SmartGoalGenerator from "../../../../components/SmartGoalGenerator";
 import Link from "next/link";
+import { APP_CONFIG } from "../../../../config";
+import UpgradeModal from "../../../../components/UpgradeModal";
 
 // --- ICONS ---
 const MagicIcon = () => (
@@ -107,6 +109,7 @@ export default function StudentPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [goalToDelete, setGoalToDelete] = useState<number | null>(null);
   const [showSmartGenerator, setShowSmartGenerator] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   // Goal Form State
   const [subject, setSubject] = useState("");
@@ -126,7 +129,7 @@ export default function StudentPage() {
   const [editGrade, setEditGrade] = useState("K");
   const [editClassType, setEditClassType] = useState("General Ed");
   const [editDate, setEditDate] = useState("");
-  const [hasIepDate, setHasIepDate] = useState(true); // <--- NEW TOGGLE
+  const [hasIepDate, setHasIepDate] = useState(true);
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -146,7 +149,6 @@ export default function StudentPage() {
         setEditGrade(found.grade || "K");
         setEditClassType(found.class_type || "General Ed");
 
-        // Handle Null Date
         if (found.iep_date) {
           setHasIepDate(true);
           setEditDate(new Date(found.iep_date).toISOString().split("T")[0]);
@@ -163,6 +165,18 @@ export default function StudentPage() {
       console.error(error);
       toast.error("Failed to load data");
     }
+  };
+
+  // --- HELPERS ---
+  const checkPaywall = async () => {
+    if (APP_CONFIG.ENABLE_PAYWALL) {
+      const { license_status } = await dbService.getLicenseStatus();
+      if (license_status !== "active") {
+        setShowPaywall(true);
+        return true; // Blocked
+      }
+    }
+    return false; // Allowed
   };
 
   const handleUpdateStudent = async (e: React.FormEvent) => {
@@ -233,7 +247,6 @@ export default function StudentPage() {
           toast.success("Saved to your Goal Library!");
         }
       }
-
       setIsAddingGoal(false);
       setEditingGoalId(null);
       setSubject("");
@@ -251,6 +264,8 @@ export default function StudentPage() {
   };
 
   const handleGenerateGoal = async () => {
+    if (await checkPaywall()) return;
+
     if (!subject) {
       toast.error("Please enter a Subject first.");
       return;
@@ -274,7 +289,7 @@ export default function StudentPage() {
     }
   };
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -282,6 +297,10 @@ export default function StudentPage() {
       toast.error("Browser does not support voice.");
       return;
     }
+
+    // --- BLOCK VOICE ---
+    if (await checkPaywall()) return;
+
     if (isListening) {
       if (recognitionRef.current) recognitionRef.current.stop();
       setIsListening(false);
@@ -505,8 +524,6 @@ export default function StudentPage() {
                   <option value="OT">Occupational Therapy</option>
                 </select>
               </div>
-
-              {/* DATE TOGGLE */}
               <div className="p-3 bg-slate-50 dark:bg-zinc-800/50 rounded-lg border border-slate-200 dark:border-zinc-800">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-bold text-slate-700 dark:text-zinc-300">
@@ -535,7 +552,6 @@ export default function StudentPage() {
                   </div>
                 )}
               </div>
-
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -575,7 +591,8 @@ export default function StudentPage() {
                 />
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
+                    if (await checkPaywall()) return;
                     if (!subject) {
                       toast.error("Enter a subject first");
                       return;
@@ -589,7 +606,6 @@ export default function StudentPage() {
                 </button>
               </div>
             </div>
-
             <div className="p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-md border border-slate-200 dark:border-zinc-800">
               <div className="flex items-center gap-2 mb-3">
                 <input
@@ -656,7 +672,6 @@ export default function StudentPage() {
                 </div>
               )}
             </div>
-
             <div className="relative">
               <label className="block text-sm font-medium mb-1">
                 Description
@@ -848,6 +863,12 @@ export default function StudentPage() {
           const text = selectedGoals.join("\n\n");
           setDescription((prev) => (prev ? prev + "\n\n" + text : text));
         }}
+      />
+
+      {/* PAYWALL MODAL */}
+      <UpgradeModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
       />
     </div>
   );

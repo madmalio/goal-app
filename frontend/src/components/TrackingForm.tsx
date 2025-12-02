@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { TrackingLog, dbService, Manipulative } from "../utils/db";
 import { useToast } from "../context/ToastContext";
+import { APP_CONFIG } from "../config"; // <--- 1. Import Config
+import UpgradeModal from "./UpgradeModal"; // <--- 1. Import Modal
 
 // --- ICONS ---
 const ToggleBtn = ({ label, selected, onClick }: any) => (
@@ -127,6 +129,9 @@ export default function TrackingForm({
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
+  // NEW: Paywall State
+  const [showPaywall, setShowPaywall] = useState(false);
+
   useEffect(() => {
     dbService.getManipulatives().then(setManipulativesList);
   }, []);
@@ -181,13 +186,28 @@ export default function TrackingForm({
     setDate(new Date().toLocaleDateString("en-CA"));
   };
 
+  // --- 2. HELPER: Check Paywall ---
+  const checkPaywall = async () => {
+    if (APP_CONFIG.ENABLE_PAYWALL) {
+      const { license_status } = await dbService.getLicenseStatus();
+      if (license_status !== "active") {
+        setShowPaywall(true);
+        return true; // Blocked
+      }
+    }
+    return false; // Allowed
+  };
+
   const togglePrompt = (p: string) => {
     setPrompts((prev) =>
       prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
     );
   };
 
-  const handleGenerateNarrative = () => {
+  const handleGenerateNarrative = async () => {
+    // --- BLOCK MAGIC ---
+    if (await checkPaywall()) return;
+
     const parts: string[] = [];
     const firstName = studentName ? studentName.split(" ")[0] : "The student";
     if (compliance && behavior)
@@ -240,7 +260,7 @@ export default function TrackingForm({
     toast.success("Narrative generated!");
   };
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -248,6 +268,10 @@ export default function TrackingForm({
       toast.error("Browser does not support voice.");
       return;
     }
+
+    // --- BLOCK VOICE ---
+    if (await checkPaywall()) return;
+
     if (isListening) {
       recognitionRef.current?.stop();
       setIsListening(false);
@@ -298,319 +322,324 @@ export default function TrackingForm({
   };
 
   return (
-    <form
-      onSubmit={handleFormSubmit}
-      className={`border p-6 rounded-xl space-y-6 shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 ${
-        initialData ? "border-indigo-500/50" : ""
-      }`}
-    >
-      {initialData && (
-        <div className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300 px-3 py-2 rounded text-sm font-bold flex justify-between items-center">
-          <span>EDITING MODE</span>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-xs hover:underline"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {/* Date & Time */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
-            Date
-          </label>
-          <div className="relative">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-              <CalendarIcon />
-            </div>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-              onClick={(e) =>
-                (e.currentTarget as HTMLInputElement).showPicker()
-              }
-              className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white [color-scheme:light] dark:[color-scheme:dark] cursor-pointer"
-            />
+    <>
+      <form
+        onSubmit={handleFormSubmit}
+        className={`border p-6 rounded-xl space-y-6 shadow-sm transition-colors bg-white border-slate-200 dark:bg-zinc-900 dark:border-zinc-800 ${
+          initialData ? "border-indigo-500/50" : ""
+        }`}
+      >
+        {initialData && (
+          <div className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300 px-3 py-2 rounded text-sm font-bold flex justify-between items-center">
+            <span>EDITING MODE</span>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-xs hover:underline"
+            >
+              Cancel
+            </button>
           </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
-            Time Spent
-          </label>
-          <input
-            type="text"
-            value={timeSpent}
-            onChange={(e) => setTimeSpent(e.target.value)}
-            placeholder="e.g. 15 min"
-            className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-          />
-        </div>
-      </div>
+        )}
 
-      {/* SCORE SECTION */}
-      <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 dark:bg-zinc-800/50 dark:border-zinc-700">
-        <label className="block text-sm font-bold mb-3 dark:text-zinc-300 text-center">
-          Data Collection Mode
-        </label>
-        <div className="flex bg-white dark:bg-zinc-900 p-1 rounded-md border border-slate-200 dark:border-zinc-700 mb-4">
-          <button
-            type="button"
-            onClick={() => setScoreType("fraction")}
-            className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${
-              scoreType === "fraction"
-                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
-                : "text-slate-500 hover:text-slate-700 dark:text-zinc-500"
-            }`}
-          >
-            Count (x/y)
-          </button>
-          <button
-            type="button"
-            onClick={() => setScoreType("percentage")}
-            className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${
-              scoreType === "percentage"
-                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
-                : "text-slate-500 hover:text-slate-700 dark:text-zinc-500"
-            }`}
-          >
-            Percentage (%)
-          </button>
-        </div>
-        {scoreType === "fraction" ? (
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
-                Correct
-              </label>
+        {/* Date & Time */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
+              Date
+            </label>
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <CalendarIcon />
+              </div>
               <input
-                type="text"
-                inputMode="numeric"
-                value={scoreNum}
-                onChange={(e) => setScoreNum(e.target.value)}
-                placeholder="8"
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
-              />
-            </div>
-            <span className="text-slate-400 font-bold text-2xl mt-4">/</span>
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
-                Total
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={scoreDenom}
-                onChange={(e) => setScoreDenom(e.target.value)}
-                placeholder="10"
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+                onClick={(e) =>
+                  (e.currentTarget as HTMLInputElement).showPicker()
+                }
+                className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white [color-scheme:light] dark:[color-scheme:dark] cursor-pointer"
               />
             </div>
           </div>
-        ) : (
-          <div className="relative max-w-[150px] mx-auto">
-            <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
-              Accuracy
+          <div>
+            <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
+              Time Spent
             </label>
             <input
               type="text"
-              inputMode="numeric"
-              value={scorePercent}
-              onChange={(e) => setScorePercent(e.target.value)}
-              placeholder="80"
-              className="w-full pl-4 pr-8 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
+              value={timeSpent}
+              onChange={(e) => setTimeSpent(e.target.value)}
+              placeholder="e.g. 15 min"
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
             />
-            <span className="absolute right-4 top-8 text-slate-400 font-bold">
-              %
+          </div>
+        </div>
+
+        {/* SCORE SECTION */}
+        <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 dark:bg-zinc-800/50 dark:border-zinc-700">
+          <label className="block text-sm font-bold mb-3 dark:text-zinc-300 text-center">
+            Data Collection Mode
+          </label>
+          <div className="flex bg-white dark:bg-zinc-900 p-1 rounded-md border border-slate-200 dark:border-zinc-700 mb-4">
+            <button
+              type="button"
+              onClick={() => setScoreType("fraction")}
+              className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${
+                scoreType === "fraction"
+                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
+                  : "text-slate-500 hover:text-slate-700 dark:text-zinc-500"
+              }`}
+            >
+              Count (x/y)
+            </button>
+            <button
+              type="button"
+              onClick={() => setScoreType("percentage")}
+              className={`flex-1 py-1.5 text-xs font-bold rounded transition-colors ${
+                scoreType === "percentage"
+                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
+                  : "text-slate-500 hover:text-slate-700 dark:text-zinc-500"
+              }`}
+            >
+              Percentage (%)
+            </button>
+          </div>
+          {scoreType === "fraction" ? (
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
+                  Correct
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={scoreNum}
+                  onChange={(e) => setScoreNum(e.target.value)}
+                  placeholder="8"
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
+                />
+              </div>
+              <span className="text-slate-400 font-bold text-2xl mt-4">/</span>
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
+                  Total
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={scoreDenom}
+                  onChange={(e) => setScoreDenom(e.target.value)}
+                  placeholder="10"
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="relative max-w-[150px] mx-auto">
+              <label className="block text-xs font-medium text-slate-500 mb-1 text-center">
+                Accuracy
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={scorePercent}
+                onChange={(e) => setScorePercent(e.target.value)}
+                placeholder="80"
+                className="w-full pl-4 pr-8 py-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white text-center text-lg"
+              />
+              <span className="absolute right-4 top-8 text-slate-400 font-bold">
+                %
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Prompts Section */}
+        <div>
+          <label className="block text-sm font-medium mb-2 dark:text-zinc-300">
+            Prompts Used
+          </label>
+          <div className="flex gap-2">
+            {["HOH", "VIP", "VP", "Independent"].map((p) => (
+              <ToggleBtn
+                key={p}
+                label={p}
+                selected={prompts.includes(p)}
+                onClick={() => togglePrompt(p)}
+              />
+            ))}
+          </div>
+          <div className="mt-3 text-xs text-slate-500 bg-slate-50 dark:bg-zinc-800 border border-slate-100 dark:border-zinc-700 rounded-md p-2 flex flex-wrap gap-x-4 gap-y-1 justify-center">
+            <span className="flex items-center gap-1">
+              <span className="font-bold text-slate-700 dark:text-zinc-300">
+                HOH
+              </span>{" "}
+              Hand over Hand
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="font-bold text-slate-700 dark:text-zinc-300">
+                VIP
+              </span>{" "}
+              Visual Prompt
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="font-bold text-slate-700 dark:text-zinc-300">
+                VP
+              </span>{" "}
+              Verbal Prompt
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="font-bold text-slate-700 dark:text-zinc-300">
+                IND
+              </span>{" "}
+              Independent
             </span>
           </div>
-        )}
-      </div>
-
-      {/* Prompts Section */}
-      <div>
-        <label className="block text-sm font-medium mb-2 dark:text-zinc-300">
-          Prompts Used
-        </label>
-        <div className="flex gap-2">
-          {["HOH", "VIP", "VP", "Independent"].map((p) => (
-            <ToggleBtn
-              key={p}
-              label={p}
-              selected={prompts.includes(p)}
-              onClick={() => togglePrompt(p)}
-            />
-          ))}
-        </div>
-        <div className="mt-3 text-xs text-slate-500 bg-slate-50 dark:bg-zinc-800 border border-slate-100 dark:border-zinc-700 rounded-md p-2 flex flex-wrap gap-x-4 gap-y-1 justify-center">
-          <span className="flex items-center gap-1">
-            <span className="font-bold text-slate-700 dark:text-zinc-300">
-              HOH
-            </span>{" "}
-            Hand over Hand
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="font-bold text-slate-700 dark:text-zinc-300">
-              VIP
-            </span>{" "}
-            Visual Prompt
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="font-bold text-slate-700 dark:text-zinc-300">
-              VP
-            </span>{" "}
-            Verbal Prompt
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="font-bold text-slate-700 dark:text-zinc-300">
-              IND
-            </span>{" "}
-            Independent
-          </span>
-        </div>
-      </div>
-
-      {/* Behavior & Compliance */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-2 dark:text-zinc-300">
-            Behavior
-          </label>
-          <div className="flex flex-col gap-2">
-            {["Positive", "Neutral", "Refusal"].map((b) => (
-              <ToggleBtn
-                key={b}
-                label={b}
-                selected={behavior === b}
-                onClick={() => setBehavior(b)}
-              />
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-2 dark:text-zinc-300">
-            Compliance
-          </label>
-          <div className="flex flex-col gap-2">
-            {["Fully", "Partially", "Reminders"].map((c) => (
-              <ToggleBtn
-                key={c}
-                label={c}
-                selected={compliance === c}
-                onClick={() => setCompliance(c)}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* MANIPULATIVES */}
-      <div className="p-4 rounded-xl border bg-slate-50 border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
-        {/* FIX: Flex + Items-center removes the margin-bottom glitch */}
-        <div className="flex items-center justify-between">
-          <label
-            className="text-sm text-slate-700 dark:text-zinc-300 cursor-pointer select-none"
-            htmlFor="mani-toggle"
-          >
-            Used Manipulatives?
-          </label>
-          <input
-            id="mani-toggle"
-            type="checkbox"
-            checked={hasManipulatives}
-            onChange={(e) => setHasManipulatives(e.target.checked)}
-            className="w-5 h-5 accent-indigo-500 cursor-pointer"
-          />
         </div>
 
-        {hasManipulatives && (
-          <div className="mt-3 space-y-2 animate-fade-in">
-            <select
-              value={manipulativesType}
-              onChange={(e) => setManipulativesType(e.target.value)}
-              className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-            >
-              <option value="">Select Type...</option>
-              {manipulativesList.map((m) => (
-                <option key={m.id} value={m.label}>
-                  {m.label}
-                </option>
+        {/* Behavior & Compliance */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2 dark:text-zinc-300">
+              Behavior
+            </label>
+            <div className="flex flex-col gap-2">
+              {["Positive", "Neutral", "Refusal"].map((b) => (
+                <ToggleBtn
+                  key={b}
+                  label={b}
+                  selected={behavior === b}
+                  onClick={() => setBehavior(b)}
+                />
               ))}
-            </select>
-
-            {/* LIBRARY LINK with TAB */}
-            <div className="text-right">
-              <Link
-                href="/library?tab=tools"
-                className="text-[10px] text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 underline font-medium"
-              >
-                + Add or Edit Tools
-              </Link>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Notes */}
-      <div>
-        <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
-          Session Notes
-        </label>
-        <div className="relative">
-          <textarea
-            rows={3}
-            placeholder="Anecdotal data..."
-            className="w-full px-3 py-2 pb-12 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-          <div className="absolute bottom-2 right-2 flex gap-1">
-            <button
-              type="button"
-              onClick={handleGenerateNarrative}
-              className="p-2 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all"
-              title="Magic Narrative"
-            >
-              <MagicIcon />
-            </button>
-            <button
-              type="button"
-              onClick={toggleListening}
-              className={`p-2 rounded-full transition-all ${
-                isListening
-                  ? "bg-red-100 text-red-600 animate-pulse"
-                  : "text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-zinc-800"
-              }`}
-              title={isListening ? "Stop Listening" : "Dictate Note"}
-            >
-              {isListening ? <StopIcon /> : <MicIcon />}
-            </button>
+          <div>
+            <label className="block text-sm font-medium mb-2 dark:text-zinc-300">
+              Compliance
+            </label>
+            <div className="flex flex-col gap-2">
+              {["Fully", "Partially", "Reminders"].map((c) => (
+                <ToggleBtn
+                  key={c}
+                  label={c}
+                  selected={compliance === c}
+                  onClick={() => setCompliance(c)}
+                />
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex gap-3 pt-2">
-        {initialData && (
+        {/* Manipulatives */}
+        <div className="p-4 rounded-xl border bg-slate-50 border-slate-200 dark:bg-zinc-900 dark:border-zinc-800">
+          {/* Fixed Alignment */}
+          <div className="flex items-center justify-between">
+            <label
+              className="text-sm text-slate-700 dark:text-zinc-300 cursor-pointer select-none"
+              htmlFor="mani-toggle"
+            >
+              Used Manipulatives?
+            </label>
+            <input
+              type="checkbox"
+              id="mani-toggle"
+              checked={hasManipulatives}
+              onChange={(e) => setHasManipulatives(e.target.checked)}
+              className="w-5 h-5 accent-indigo-500 cursor-pointer"
+            />
+          </div>
+          {hasManipulatives && (
+            <div className="mt-3 space-y-2 animate-fade-in">
+              <select
+                value={manipulativesType}
+                onChange={(e) => setManipulativesType(e.target.value)}
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+              >
+                <option value="">Select Type...</option>
+                {manipulativesList.map((m) => (
+                  <option key={m.id} value={m.label}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <div className="text-right">
+                <Link
+                  href="/library?tab=tools"
+                  className="text-[10px] text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 underline font-medium"
+                >
+                  + Add or Edit Tools
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-sm font-medium mb-1 dark:text-zinc-300">
+            Session Notes
+          </label>
+          <div className="relative">
+            <textarea
+              rows={3}
+              placeholder="Anecdotal data..."
+              className="w-full px-3 py-2 pb-12 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white transition-all"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+            <div className="absolute bottom-2 right-2 flex gap-1">
+              <button
+                type="button"
+                onClick={handleGenerateNarrative}
+                className="p-2 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all"
+                title="Magic Narrative"
+              >
+                <MagicIcon />
+              </button>
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`p-2 rounded-full transition-all ${
+                  isListening
+                    ? "bg-red-100 text-red-600 animate-pulse"
+                    : "text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                }`}
+                title={isListening ? "Stop Listening" : "Dictate Note"}
+              >
+                {isListening ? <StopIcon /> : <MicIcon />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          {initialData && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-1/3 py-3 rounded-md font-bold transition-colors bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-white"
+            >
+              Cancel
+            </button>
+          )}
           <button
-            type="button"
-            onClick={onCancel}
-            className="w-1/3 py-3 rounded-md font-bold transition-colors bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-white"
+            type="submit"
+            className="w-full py-3 font-bold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm"
           >
-            Cancel
+            {initialData ? "Update Log Entry" : "Save Log Entry"}
           </button>
-        )}
-        <button
-          type="submit"
-          className="w-full py-3 font-bold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm"
-        >
-          {initialData ? "Update Log Entry" : "Save Log Entry"}
-        </button>
-      </div>
-    </form>
+        </div>
+      </form>
+
+      {/* 3. ADD MODAL TO JSX */}
+      <UpgradeModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+      />
+    </>
   );
 }

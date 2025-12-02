@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation"; // <--- 1. Import Hook
+import { useSearchParams } from "next/navigation";
 import { dbService, CustomGoalTemplate, Manipulative } from "../../../utils/db";
 import { useToast } from "../../../context/ToastContext";
 import ConfirmModal from "../../../components/ConfirmModal";
+import { APP_CONFIG } from "../../../config"; // <--- Import Config
+import UpgradeModal from "../../../components/UpgradeModal"; // <--- Import Modal
 
-// ... (Icons: PlusIcon, SearchIcon, TrashIcon, EditIcon - keep as is) ...
+// Icons
 const PlusIcon = () => (
   <svg
     className="w-5 h-5"
@@ -69,7 +71,7 @@ const EditIcon = () => (
 );
 
 export default function LibraryPage() {
-  const searchParams = useSearchParams(); // <--- 2. Get Search Params
+  const searchParams = useSearchParams();
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<"goals" | "tools">("goals");
 
@@ -83,18 +85,18 @@ export default function LibraryPage() {
   const [goalSubject, setGoalSubject] = useState("");
   const [goalText, setGoalText] = useState("");
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const [showPaywall, setShowPaywall] = useState(false); // <--- New State
 
   // -- MANIPULATIVE STATE --
   const [tools, setTools] = useState<Manipulative[]>([]);
   const [newTool, setNewTool] = useState("");
 
-  // 3. SYNC TAB ON LOAD
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "tools") {
       setActiveTab("tools");
     } else {
-      setActiveTab("goals"); // Optional: Reset to default
+      setActiveTab("goals");
     }
   }, [searchParams]);
 
@@ -128,6 +130,23 @@ export default function LibraryPage() {
     }
   }, [searchQuery, goals]);
 
+  // --- PAYWALL CHECKER ---
+  const checkGoalLimit = async () => {
+    if (APP_CONFIG.ENABLE_PAYWALL) {
+      const { license_status } = await dbService.getLicenseStatus();
+      // Check if creating NEW (not editing) and limit reached
+      if (
+        license_status !== "active" &&
+        goals.length >= APP_CONFIG.FREE_GOAL_LIMIT
+      ) {
+        setShowPaywall(true);
+        return true; // Blocked
+      }
+    }
+    return false; // Allowed
+  };
+
+  // --- GOAL ACTIONS ---
   const handleSaveGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -139,6 +158,7 @@ export default function LibraryPage() {
         );
         toast.success("Template updated");
       } else {
+        // NOTE: We check limit on OPEN, but double check here is safe
         await dbService.createCustomGoalTemplate(goalSubject, goalText);
         toast.success("Template created");
       }
@@ -161,17 +181,22 @@ export default function LibraryPage() {
     setDeleteGoalId(null);
   };
 
-  const openGoalModal = (goal?: CustomGoalTemplate) => {
+  const openGoalModal = async (goal?: CustomGoalTemplate) => {
     if (goal) {
+      // Editing is always allowed
       setEditingGoalId(goal.id);
       setGoalSubject(goal.subject);
       setGoalText(goal.text);
+      setIsGoalModalOpen(true);
     } else {
+      // Creating new: Check Limit
+      if (await checkGoalLimit()) return;
+
       setEditingGoalId(null);
       setGoalSubject("");
       setGoalText("");
+      setIsGoalModalOpen(true);
     }
-    setIsGoalModalOpen(true);
   };
 
   const insertPlaceholder = (placeholder: string) => {
@@ -191,6 +216,7 @@ export default function LibraryPage() {
     }, 0);
   };
 
+  // --- TOOL ACTIONS ---
   const handleAddTool = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTool.trim()) return;
@@ -220,6 +246,7 @@ export default function LibraryPage() {
         Resource Library
       </h1>
 
+      {/* TABS */}
       <div className="border-b border-slate-200 dark:border-zinc-800 flex gap-6">
         <button
           onClick={() => setActiveTab("goals")}
@@ -243,6 +270,7 @@ export default function LibraryPage() {
         </button>
       </div>
 
+      {/* --- TAB 1: GOALS --- */}
       {activeTab === "goals" && (
         <div className="animate-fade-in space-y-6">
           <div className="flex justify-between items-center">
@@ -315,6 +343,7 @@ export default function LibraryPage() {
         </div>
       )}
 
+      {/* --- TAB 2: TOOLS --- */}
       {activeTab === "tools" && (
         <div className="animate-fade-in max-w-2xl">
           <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
@@ -386,7 +415,7 @@ export default function LibraryPage() {
                   required
                   autoFocus
                   type="text"
-                  placeholder="e.g. Reading, Behavior"
+                  placeholder="e.g. Reading"
                   value={goalSubject}
                   onChange={(e) => setGoalSubject(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md dark:bg-zinc-950 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
@@ -442,6 +471,12 @@ export default function LibraryPage() {
         message="Are you sure? This cannot be undone."
         confirmText="Delete"
         isDestructive
+      />
+
+      {/* PAYWALL MODAL */}
+      <UpgradeModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
       />
     </div>
   );
