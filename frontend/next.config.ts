@@ -4,7 +4,7 @@ import withSerwistInit from "@serwist/next";
 const withSerwist = withSerwistInit({
   swSrc: "src/app/sw.ts", // Your custom worker
   swDest: "public/sw.js", // Where it outputs the compiled worker
-  disable: process.env.NODE_ENV === "development", // Only run in production (npm run build)
+  disable: false,
 });
 
 const nextConfig: NextConfig = {

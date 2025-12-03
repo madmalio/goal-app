@@ -119,7 +119,7 @@ export default function LegalSection() {
         </div>
       </div>
 
-      {/* Section 3 */}
+      {/* Section 3 - RESTORED */}
       <div className="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-slate-100 dark:border-zinc-700">
         <div className="flex items-start gap-4">
           <div className="p-2 bg-white dark:bg-zinc-900 rounded-lg shadow-sm">
@@ -134,6 +134,26 @@ export default function LegalSection() {
               is inherently compliant with student privacy laws regarding data
               transmission. Security relies on the physical control of this
               device.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 4 - NEW LEMON SQUEEZY */}
+      <div className="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-slate-100 dark:border-zinc-700">
+        <div className="flex items-start gap-4">
+          <div className="p-2 bg-white dark:bg-zinc-900 rounded-lg shadow-sm">
+            <ShieldCheckIcon />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1">
+              4. License Verification
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
+              To verify Pro licenses, this app connects to{" "}
+              <strong>Lemon Squeezy</strong>. We send your License Key and a
+              unique device ID to their servers to validate your purchase. No
+              student data is ever sent with this request.
             </p>
           </div>
         </div>
@@ -156,7 +176,20 @@ export default function LegalSection() {
         </p>
       </div>
 
-      {/* 2. Disclaimer (Standard "AS IS" Clause) */}
+      {/* 2. Merchant of Record - NEW */}
+      <div className="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-slate-100 dark:border-zinc-700">
+        <h3 className="font-bold text-slate-900 dark:text-white mb-2">
+          2. Merchant of Record
+        </h3>
+        <p className="text-xs leading-relaxed">
+          Our order process is conducted by our online reseller,{" "}
+          <strong>Lemon Squeezy</strong>. Lemon Squeezy is the Merchant of
+          Record for all our orders and handles all payment security and tax
+          compliance.
+        </p>
+      </div>
+
+      {/* 3. Disclaimer (Standard "AS IS" Clause) */}
       <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-800/50">
         <div className="flex gap-3">
           <div className="mt-1 text-amber-500">
@@ -176,7 +209,7 @@ export default function LegalSection() {
           </div>
           <div>
             <h3 className="font-bold text-amber-800 dark:text-amber-200 mb-2">
-              2. Disclaimer of Warranty
+              3. Disclaimer of Warranty
             </h3>
             <p className="text-[11px] leading-relaxed font-medium uppercase text-amber-900/80 dark:text-amber-400/80">
               The software is provided "AS IS", without warranty of any kind,
@@ -189,10 +222,10 @@ export default function LegalSection() {
         </div>
       </div>
 
-      {/* 3. Data Liability */}
+      {/* 4. Data Liability */}
       <div className="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-slate-100 dark:border-zinc-700">
         <h3 className="font-bold text-slate-900 dark:text-white mb-2">
-          3. Data Loss & Liability
+          4. Data Loss & Liability
         </h3>
         <p className="text-xs leading-relaxed mb-2">
           You acknowledge that this Application runs locally on your device. The
@@ -210,10 +243,10 @@ export default function LegalSection() {
         </ul>
       </div>
 
-      {/* 4. Termination */}
+      {/* 5. Termination - RESTORED */}
       <div className="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-xl border border-slate-100 dark:border-zinc-700">
         <h3 className="font-bold text-slate-900 dark:text-white mb-2">
-          4. Termination
+          5. Termination
         </h3>
         <p className="text-xs leading-relaxed">
           You may terminate this agreement at any time by deleting the
