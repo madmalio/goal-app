@@ -121,7 +121,7 @@ export default function Sidebar() {
           className="block p-6 border-b transition-colors border-slate-100 hover:bg-slate-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50"
         >
           <h1 className="text-xl font-bold tracking-wider text-slate-900 dark:text-white">
-            GOAL MASTER
+            VAUTE
           </h1>
           <p className="text-xs text-slate-500 dark:text-zinc-500 mt-1">
             IEP Tracking System

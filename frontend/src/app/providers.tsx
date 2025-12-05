@@ -9,6 +9,47 @@ import { BackupProvider } from "../context/BackupContext";
 import { StudentProvider } from "../context/StudentContext";
 import { InstallProvider } from "../context/InstallContext"; // <--- NEW IMPORT
 
+/* --- LogoIcon with vertical centering (Option 1: translate up) --- */
+function LogoIcon({
+  className = "w-10 h-10 text-white",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      aria-label="Vaute shield with graduation hat"
+    >
+      {/* Move entire icon up slightly for optical center */}
+      <g transform="translate(0,-0.7)">
+        {/* Rounded crown shield */}
+        <path
+          d="M12 22s8-4 8-10V5Q12 2 4 5v7c0 6 8 10 8 10z"
+          strokeWidth={1.9}
+          strokeLinejoin="round"
+        />
+        {/* Mortarboard */}
+        <path
+          d="M12 6L6.5 10L12 14L17.5 10Z"
+          strokeWidth={1.6}
+          strokeLinejoin="round"
+        />
+        {/* Tassel */}
+        <path d="M17.5 10V14" strokeWidth={1.6} strokeLinecap="round" />
+        {/* Cap base/bowl */}
+        <path
+          d="M8.5 11.5v1.5a3.5 3.5 0 0 0 7 0v-1.5"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [isDbReady, setIsDbReady] = useState(false);
 
@@ -31,38 +72,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-50 dark:bg-zinc-950 transition-colors">
         <div className="flex flex-col items-center animate-fade-in">
-          {/* LOGO ICON */}
+          {/* LOGO ICON (Vaute + vertically centered) */}
           <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-500/20 mb-6 rotate-3 animate-pulse">
-            <svg
-              className="w-10 h-10 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 14l9-5-9-5-9 5 9 5z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"
-              />
-            </svg>
+            <LogoIcon className="w-10 h-10 text-white" />
           </div>
 
-          {/* APP NAME */}
+          {/* APP NAME (optional: rename) */}
           <h1 className="text-3xl font-black tracking-widest text-slate-900 dark:text-white uppercase mb-2">
-            Goal Master
+            Vaute
           </h1>
 
           {/* LOADING TEXT */}
@@ -99,11 +116,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <PrivacyProvider>
           <BackupProvider>
             <StudentProvider>
-              <InstallProvider>
-                {" "}
-                {/* <--- WRAPPER ADDED HERE */}
-                {children}
-              </InstallProvider>
+              <InstallProvider>{children}</InstallProvider>
             </StudentProvider>
           </BackupProvider>
         </PrivacyProvider>

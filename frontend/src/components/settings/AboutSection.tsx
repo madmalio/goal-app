@@ -38,7 +38,7 @@ export default function AboutSection() {
   return (
     <section className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm mt-8">
       <h2 className="text-xl font-semibold mb-4 dark:text-white text-slate-800">
-        About Goal Master
+        About Vaute
       </h2>
 
       <div className="flex items-start justify-between">
@@ -54,7 +54,7 @@ export default function AboutSection() {
             the cloud.
           </p>
           <div className="mt-4 text-xs text-slate-400">
-            <p>© {new Date().getFullYear()} Goal Master</p>
+            <p>© {new Date().getFullYear()} Vaute</p>
             <p>Built for Special Education Professionals</p>
           </div>
         </div>

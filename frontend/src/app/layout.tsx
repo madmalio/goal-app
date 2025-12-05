@@ -9,7 +9,7 @@ import PrivacyCurtain from "../components/PrivacyCurtain";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Goal Master",
+  title: "Vaute",
   description: "Offline IEP Goal Tracking",
   manifest: "/manifest.json",
   icons: {
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Goal Master",
+    title: "Vaute",
   },
 };
 

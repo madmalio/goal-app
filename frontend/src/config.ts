@@ -7,5 +7,6 @@ export const APP_CONFIG = {
   FREE_GOAL_LIMIT: 5,
 
   // LINKS
-  PURCHASE_LINK: "https://your-store-link.com",
+  PURCHASE_LINK:
+    "https://vaute.lemonsqueezy.com/buy/d44742cd-7108-4ef7-a066-507321e9d944",
 };

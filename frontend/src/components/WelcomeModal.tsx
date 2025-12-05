@@ -118,7 +118,7 @@ export default function WelcomeModal() {
             <div className="text-center">
               <div className="text-4xl mb-4">👋</div>
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                Welcome to Goal Master
+                Welcome to Vaute
               </h2>
               <p className="text-slate-500 dark:text-zinc-400 mt-2">
                 Let's get your classroom set up. Data is stored{" "}

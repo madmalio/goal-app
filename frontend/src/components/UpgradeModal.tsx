@@ -38,7 +38,7 @@ export default function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
         <div className="p-6 space-y-4">
           <div className="text-sm text-slate-600 dark:text-zinc-300 text-center leading-relaxed">
             <p className="mb-4">
-              You've hit a limit! Upgrade to <strong>Goal Master Pro</strong> to
+              You've hit a limit! Upgrade to <strong>Vaute Pro</strong> to
               unlock:
             </p>
             <ul className="text-left list-disc pl-8 space-y-2 mb-4 text-xs sm:text-sm">

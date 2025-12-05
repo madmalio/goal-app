@@ -62,7 +62,7 @@ export default function InstallAppButton() {
       const { outcome } = await installPrompt.userChoice;
       if (outcome === "accepted") {
         clearPrompt();
-        toast.success("Installing Goal Master...");
+        toast.success("Installing Vaute...");
       }
       return;
     }

@@ -84,8 +84,8 @@ export default function LibraryPage() {
   const [deleteGoalId, setDeleteGoalId] = useState<number | null>(null);
   const [goalSubject, setGoalSubject] = useState("");
   const [goalText, setGoalText] = useState("");
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
-  const [showPaywall, setShowPaywall] = useState(false); // <--- New State
+  const [textAreaRef] = useRef<HTMLTextAreaElement>(null) as any;
+  const [showPaywall, setShowPaywall] = useState(false);
 
   // -- MANIPULATIVE STATE --
   const [tools, setTools] = useState<Manipulative[]>([]);
@@ -132,18 +132,8 @@ export default function LibraryPage() {
 
   // --- PAYWALL CHECKER ---
   const checkGoalLimit = async () => {
-    if (APP_CONFIG.ENABLE_PAYWALL) {
-      const { license_status } = await dbService.getLicenseStatus();
-      // Check if creating NEW (not editing) and limit reached
-      if (
-        license_status !== "active" &&
-        goals.length >= APP_CONFIG.FREE_GOAL_LIMIT
-      ) {
-        setShowPaywall(true);
-        return true; // Blocked
-      }
-    }
-    return false; // Allowed
+    // UNLIMITED TEMPLATES ALLOWED - Always return false
+    return false;
   };
 
   // --- GOAL ACTIONS ---
@@ -158,7 +148,6 @@ export default function LibraryPage() {
         );
         toast.success("Template updated");
       } else {
-        // NOTE: We check limit on OPEN, but double check here is safe
         await dbService.createCustomGoalTemplate(goalSubject, goalText);
         toast.success("Template created");
       }
@@ -183,15 +172,12 @@ export default function LibraryPage() {
 
   const openGoalModal = async (goal?: CustomGoalTemplate) => {
     if (goal) {
-      // Editing is always allowed
       setEditingGoalId(goal.id);
       setGoalSubject(goal.subject);
       setGoalText(goal.text);
       setIsGoalModalOpen(true);
     } else {
-      // Creating new: Check Limit
       if (await checkGoalLimit()) return;
-
       setEditingGoalId(null);
       setGoalSubject("");
       setGoalText("");

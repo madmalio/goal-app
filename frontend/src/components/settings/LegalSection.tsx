@@ -88,10 +88,10 @@ export default function LegalSection() {
               1. Local-First Architecture
             </h3>
             <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
-              Goal Master stores 100% of your data (students, goals, logs)
-              exclusively within your web browser's internal database. We do not
-              have servers, we do not have a cloud database, and we cannot see
-              your data.
+              Vaute stores 100% of your data (students, goals, logs) exclusively
+              within your web browser's internal database. We do not have
+              servers, we do not have a cloud database, and we cannot see your
+              data.
             </p>
           </div>
         </div>
@@ -170,9 +170,9 @@ export default function LegalSection() {
           1. Acceptance of Terms
         </h3>
         <p className="text-xs leading-relaxed">
-          By downloading, installing, or using Goal Master ("the Application"),
-          you agree to be bound by these terms. If you do not agree to these
-          terms, do not use the Application.
+          By downloading, installing, or using Vaute ("the Application"), you
+          agree to be bound by these terms. If you do not agree to these terms,
+          do not use the Application.
         </p>
       </div>
 
@@ -273,7 +273,7 @@ export default function LegalSection() {
         </button>
       </div>
       <p className="text-[10px] text-slate-300 dark:text-zinc-600 mt-4 text-center">
-        Goal Master v1.0.0 • Local-First Secure Environment
+        Vaute v1.0.0 • Local-First Secure Environment
       </p>
 
       <LegalModal

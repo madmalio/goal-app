@@ -12,18 +12,41 @@ export default function IconGenerator() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // 1. Draw Background (Indigo 600)
+    // 1. Draw Background (Indigo 600 - #4f46e5)
     ctx.fillStyle = "#4f46e5";
     ctx.fillRect(0, 0, size, size);
 
-    // 2. Prepare the Exact SVG from your Loading Screen
-    // We wrap it in a standard XML structure for the browser to parse it as an image.
-    // Note: We use stroke-width="1.5" so it looks crisp at large sizes (2 is often too thick when scaled up)
+    // 2. Prepare the SVG String
+    // We converted the JSX syntax (camelCase) back to standard XML (kebab-case) for the Blob.
+    // stroke="white" ensures it contrasts against the indigo background.
     const svgString = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 14l9-5-9-5-9 5 9 5z" />
-        <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-        <path d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" />
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round">
+        <g transform="translate(0,-0.7)">
+          <!-- Rounded crown shield -->
+          <path
+            d="M12 22s8-4 8-10V5Q12 2 4 5v7c0 6 8 10 8 10z"
+            stroke-width="1.9"
+            stroke-linejoin="round"
+          />
+          <!-- Mortarboard -->
+          <path
+            d="M12 6L6.5 10L12 14L17.5 10Z"
+            stroke-width="1.6"
+            stroke-linejoin="round"
+          />
+          <!-- Tassel -->
+          <path 
+            d="M17.5 10V14" 
+            stroke-width="1.6" 
+            stroke-linecap="round" 
+          />
+          <!-- Cap base/bowl -->
+          <path
+            d="M8.5 11.5v1.5a3.5 3.5 0 0 0 7 0v-1.5"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </g>
       </svg>
     `;
 

@@ -1,4 +1,4 @@
-# Goal Master 🎓
+# Vaute 🎓
 
 A local-first, privacy-focused IEP goal tracking application for special education professionals.
 
@@ -55,4 +55,4 @@ Before you close your laptop, run through this loop one last time:
 
 If all that works, **you are done.**
 
-Congratulations on building **Goal Master**. It is a tool that will genuinely help teachers save time. Let me know if you ever want to build V2! 🚀
+Congratulations on building **Vaute**. It is a tool that will genuinely help teachers save time. Let me know if you ever want to build V2! 🚀

@@ -148,7 +148,6 @@ export default function StudentPage() {
         setEditId(found.student_id || "");
         setEditGrade(found.grade || "K");
         setEditClassType(found.class_type || "General Ed");
-
         if (found.iep_date) {
           setHasIepDate(true);
           setEditDate(new Date(found.iep_date).toISOString().split("T")[0]);
@@ -232,13 +231,13 @@ export default function StudentPage() {
         frequency,
         tracking_type: trackingType,
       };
+
       if (editingGoalId) {
         await dbService.updateGoal(editingGoalId, payload);
         toast.success("Goal updated");
       } else {
         await dbService.createGoal(payload);
         toast.success("Goal created");
-
         if (saveToLibrary && description && subject) {
           const firstName = student?.name.split(" ")[0] || "";
           const regex = new RegExp(firstName, "gi");
@@ -280,6 +279,7 @@ export default function StudentPage() {
       student.name,
       customGoals
     );
+
     if (suggestions.length > 0) {
       const randomGoal = suggestions[0];
       setDescription(randomGoal.text);
@@ -343,6 +343,41 @@ export default function StudentPage() {
     setGoalToDelete(null);
     loadData();
     toast.success("Goal deleted");
+  };
+
+  // --- NEW HANDLER FOR THE "NEW GOAL" BUTTON ---
+  const handleNewGoalClick = async () => {
+    // If closing, just close
+    if (isAddingGoal) {
+      setIsAddingGoal(false);
+      setEditingGoalId(null);
+      setSubject("");
+      setDescription("");
+      return;
+    }
+
+    // If opening, check limits
+    if (APP_CONFIG.ENABLE_PAYWALL) {
+      const { license_status } = await dbService.getLicenseStatus();
+      if (license_status !== "active") {
+        const activeCount = await dbService.getActiveGoalCount();
+
+        // DEBUGGING: Check your console to see the real count
+        console.log(
+          `Current Active Goals: ${activeCount} / Limit: ${APP_CONFIG.FREE_GOAL_LIMIT}`
+        );
+
+        if (activeCount >= APP_CONFIG.FREE_GOAL_LIMIT) {
+          setShowPaywall(true);
+          return;
+        }
+      }
+    }
+
+    setIsAddingGoal(true);
+    setEditingGoalId(null);
+    setSubject("");
+    setDescription("");
   };
 
   if (!student)
@@ -423,12 +458,7 @@ export default function StudentPage() {
           </button>
           <div className="h-6 w-px bg-slate-200 dark:bg-zinc-800 mx-1"></div>
           <button
-            onClick={() => {
-              setIsAddingGoal(!isAddingGoal);
-              setEditingGoalId(null);
-              setSubject("");
-              setDescription("");
-            }}
+            onClick={handleNewGoalClick} // <--- UPDATED HANDLER
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 ${
               isAddingGoal
                 ? "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-300"

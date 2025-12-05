@@ -304,38 +304,58 @@ export const dbService = {
 
   activateLicense: async (key: string) => {
     const db = await getDB();
-
     try {
-      // 1. Call the LemonSqueezy API (Example)
+      // 1. Call the Lemon Squeezy ACTIVATE endpoint (Public)
+      // Note: We use 'activate', not 'validate'. 'activate' does not require a secret API Key.
       const response = await fetch(
-        "https://api.lemonsqueezy.com/v1/licenses/validate",
+        "https://api.lemonsqueezy.com/v1/licenses/activate",
         {
           method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          // We send the license key and a name for this "device" (Vaute App)
           body: new URLSearchParams({
             license_key: key,
-            instance_name: "Goal Master App",
+            instance_name: "Vaute App (Web)",
           }),
         }
       );
 
       const data = await response.json();
 
-      // 2. Check if Valid
-      if (data.valid) {
+      // 2. Check if Activated
+      // Lemon Squeezy returns { activated: true, ... } on success
+      // or { error: "..." } on failure.
+      if (data.activated) {
         await db.query(
           "UPDATE settings SET license_key = $1, license_status = 'active' WHERE id = 1",
           [key]
         );
         return true;
+      } else {
+        console.warn("Activation Error:", data.error);
       }
     } catch (e) {
-      console.error("Validation Failed", e);
-      // OPTIONAL: Fallback to "Honor System" if offline?
-      // if (key.length > 10) return true;
+      console.error("Network Failed", e);
     }
 
     return false;
+  },
+
+  // NEW: Count all active goals across all students for the paywall check
+  getActiveGoalCount: async (): Promise<number> => {
+    const db = await getDB();
+    // Count goals that are active AND belong to active students
+    const res = await db.query(`
+      SELECT COUNT(*) as count 
+      FROM goals g
+      JOIN students s ON g.student_id = s.id
+      WHERE g.active = true AND s.active = true
+    `);
+    // FORCE NUMBER CONVERSION
+    return Number((res.rows[0] as any).count);
   },
 
   // STUDENTS
@@ -357,7 +377,6 @@ export const dbService = {
   ) => {
     const db = await getDB();
     const safeId = studentId && studentId.trim() !== "" ? studentId : null;
-
     const res = await db.query(
       "INSERT INTO students (name, student_id, grade, class_type, iep_date) VALUES ($1, $2, $3, $4, $5) RETURNING id",
       [name, safeId, grade, classType, iepDate]
@@ -376,7 +395,6 @@ export const dbService = {
   ) => {
     const db = await getDB();
     const safeId = studentId && studentId.trim() !== "" ? studentId : null;
-
     await db.query(
       "UPDATE students SET name = $1, student_id = $2, grade = $3, class_type = $4, iep_date = $5, active = $6 WHERE id = $7",
       [name, safeId, grade, classType, iepDate, active, id]
@@ -643,7 +661,6 @@ export const dbService = {
     const customManipulatives = await db.query(
       "SELECT * FROM custom_manipulatives"
     );
-
     return JSON.stringify({
       version: 1,
       exported_at: now,
@@ -664,7 +681,6 @@ export const dbService = {
       await db.exec(
         "DELETE FROM tracking_logs; DELETE FROM goals; DELETE FROM students; DELETE FROM settings; DELETE FROM custom_goals; DELETE FROM custom_manipulatives;"
       );
-
       if (data.settings && data.settings.length > 0) {
         const s = data.settings[0];
         await db.query(
@@ -692,7 +708,6 @@ export const dbService = {
         );
       }
 
-      // Restore Goals & Logs (standard loop) ... [Shortened for brevity, logic is identical to above]
       for (const g of data.goals)
         await db.query(
           `INSERT INTO goals (id, student_id, subject, description, active, mastery_enabled, mastery_score, mastery_count, frequency, tracking_type) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -727,7 +742,6 @@ export const dbService = {
             l.tester_name,
           ]
         );
-
       if (data.custom_goals)
         for (const c of data.custom_goals)
           await db.query(
@@ -740,7 +754,6 @@ export const dbService = {
             "INSERT INTO custom_manipulatives (label) VALUES ($1)",
             [m.label]
           );
-
       await db.exec(`
         SELECT setval('students_id_seq', (SELECT MAX(id) FROM students));
         SELECT setval('goals_id_seq', (SELECT MAX(id) FROM goals));
